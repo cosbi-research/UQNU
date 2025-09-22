@@ -1,48 +1,54 @@
-# Robust parameter estimation and identifiability analysis with Hybrid Neural Ordinary Differential Equations in Computational Biology
-Code for the paper ***Robust parameter estimation and identifiability analysis with Hybrid Neural Ordinary Differential Equations in Computational Biology***.
+# A novel approach to quantify out-of-distribution uncertainty in Neural and Universal Differential Equations
+Code for the paper [S. Giampiccolo, G. Iacca & L. Marchetti. A novel approach to quantify out-of-distribution uncertainty in Neural and Universal Differential Equations](https://doi.org/10.1038/s41540-024-00460-3)
 
-## Code
+This repository contains the scripts to replicate the analysis of uncertainty quantification performance across various experimental setups described in the main text and in the supplementary material.
 
-The project has been developed in Julia 1.9.1 and relies on the packages listed in the [Project](./Project.toml) file. The repository is structured as follows:
+---
 
-### Test Case Settings and Observation Datasets
+## 📁 Subfolder Descriptions
 
-- The directory [test case settings](test_case_settings) contains the derivative functions of the three benchmark models (both the fully mechanistic and HNODE versions) along with the original parameters, initial states, and training intervals.
-- The directory [datasets](datasets) contains the code to generate the *in-silico* training datasets.
+### 🔹 `analysis_standard_ensembles/`
+This folder contains code to replicate the **motivation case study**:  
+- Analysis of 0.95 **prediction interval coverage** for standard ensembles in the **purely data-driven** scenario.
+- Applied to all three test systems:
+  - Lotka-Volterra
+  - Damped Oscillator
+  - Lorenz System
 
-### Pipeline
-- [Step 1](): the training-validation split is performed at the beginning of the scripts in each of the following steps.
-- [Step 2A](step2a_hyperparameter_tuning): code to tune the hyperparameters (both first and second stage).
-- [Step 2B](step2b_model_trainer): code to train the HNODE models.
-- [Step 3](step3_parameters_identifiability): code to perform the identifiability analysis.
-- [Step 4](step4_confidence_intervals): code to estimate the confidence intervals.
+---
 
-### Other analyses
-- [supplementary_cell_ap_model_identifiability](supplementary_cell_ap_model_identifiability): identifiability analysis of the parameters in the original cell apoptosis model.
-- [supplementary_lotka_volterra_regularization](supplementary_lotka_volterra_regularization): analysis of the regularizer profile with different values of $\alpha$ in the Lotka Volterra HNODE model.
-- [supplementary_original_model_glyc_fit_to_noisy_data](supplementary_original_model_glyc_fit_to_noisy_data): parameter fit with the original yeast glycolysis model to the dataset $DS_{0.05}$.
-- [supplementary_identifiability_hyperparameter_analysis](supplementary_identifiability_hyperparameter_analysis): analysis of the impact of the choice of $\delta$ and $\epsilon$ on the identifiability results.
+### 🔹 `analysis_NODE_maximized/`
+This folder contains code to reproduce results of the **proposed MOD (Maximized Out-of-Distribution) ensemble method** in the **purely data-driven** setting. It compares 0.95 coverage probability of MOD ensembles vs. standard ensembles on all three test systems.
 
-### Paper figures and tables
-- [paper_latex_table_printer](paper_latex_table_printer): code to generate the tables of the paper.
-- [paper_plot_generator](paper_plot_generator): code to generate the plots of the paper.
-<!---Cite this work
+---
 
-If you use this code for academic research, you are encouraged to cite the following paper:
+### 🔹 `analysis_NODE_maximized_multiple_training_set/`
+This folder contains code to reproduce results of the **proposed MOD (Maximized Out-of-Distribution) ensemble method** in the **purely data-driven** setting, when multiple training sets (each composed by three trajectories) are used. It compares 0.95 coverage probability of MOD ensembles vs. standard ensembles on all three test systems.
 
-```
-@article{yazdani2020systems,
-  title   = {Systems biology informed deep learning for inferring parameters and hidden dynamics},
-  author  = {Yazdani, Alireza and Lu, Lu and Raissi, Maziar and Karniadakis, George Em},
-  journal = {PLoS computational biology},
-  volume  = {16},
-  number  = {11},
-  pages   = {e1007575},
-  year    = {2020}
-}
-```
--->
+---
 
-## Questions
+### 🔹 `analysis_NODE_maximized_thre_e-4/`
+Same as `analysis_NODE_maximized`, but with a stricter accuracy threshold:  it is used a lower accuracy loss threshold of $\mathcal{L}_{\text{acc}} = 10^{-4}$ to evaluate results under tighter convergence.
 
-To get help on how to use the code, simply open an issue in the GitHub "Issues" section.
+---
+
+### 🔹 `analysis_UDE_maximized/`
+This folder contains analysis code for the **partially data-driven scenario**, where both **mechanistic parameters** and **neural network parameters** are estimated jointly. It compares 0.95 coverage probability of MOD ensembles vs. standard ensembles on all three test systems. We refer to the manuscript for details about which parts of the systems are assumed to be known.
+
+---
+
+### 🔹 `analysis_UDE_with_fixed_mech_par_maximized/`
+This folder contains analysis code for the **partially data-driven scenario**, where **mechanistic parameters** are assumed to be known and fixed to their ground truth values. It compares 0.95 coverage probability of MOD ensembles vs. standard ensembles on all three test systems. We refer to the manuscript for details about which parts of the systems are assumed to be known.
+
+---
+
+## 📜 Metadata
+
+- `Manifest.toml` and `Project.toml`  
+  Define the Julia environment, dependencies, and package versions for reproducibility.
+
+---
+
+## 📝 Notes
+
+Each folder is self-contained and provides tools to reproduce specific aspects of the experimental evaluation. Refer to the individual README files inside each subfolder for detailed instructions on how to execute the scripts.
