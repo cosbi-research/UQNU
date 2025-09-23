@@ -1,0 +1,3 @@
+sbatch launcher_ensemble_lv.sh
+sbatch launcher_ensemble_lorenz.sh
+sbatch launcher_ensemble_damped.sh
