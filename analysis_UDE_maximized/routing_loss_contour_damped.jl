@@ -2,7 +2,7 @@ cd(@__DIR__)
 
 using ComponentArrays, Lux, SciMLSensitivity, Serialization, OrdinaryDiffEq, LinearAlgebra, Random, DataFrames, CSV, Plots, Statistics
 using Optimization, OptimizationOptimisers, OptimizationOptimJL, StableRNGs
-using DiffEqFlux, Flux, Zygote, StatsPlots, LaTeXStrings, Gadfly, ColorSchemes, Dates, Distributions
+using Flux, Zygote, StatsPlots, LaTeXStrings, Gadfly, ColorSchemes, Dates, Distributions
 using Logging, StatsBase
 
 loglevel = Logging.Info
