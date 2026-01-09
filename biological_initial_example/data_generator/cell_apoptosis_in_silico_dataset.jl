@@ -2,7 +2,7 @@ cd(@__DIR__)
 
 using ComponentArrays, Lux, SciMLSensitivity, Serialization, OrdinaryDiffEq, LinearAlgebra, Random, DataFrames, CSV, Plots, Statistics
 using Optimization, OptimizationOptimisers, OptimizationOptimJL, StableRNGs
-using Flux, Zygote, StatsPlots, LaTeXStrings, Gadfly, ColorSchemes
+using Zygote, StatsPlots, LaTeXStrings, Gadfly, ColorSchemes
 
 rng = Random.default_rng()
 Random.seed!(rng, 10)
@@ -14,7 +14,7 @@ original_u0_death = [1.34 * 10^5 / 10^5, 1.0*10^5 / 10^5, 2.67*10^5 / 10^5, 0.0 
 
 
 initial_time_training = 0.0f0
-end_time_training = 60.0f0
+end_time_training = 16.0f0
 times = range(initial_time_training, end_time_training, length=120)
 
 #function to generate the Data
@@ -52,7 +52,7 @@ rng = Random.default_rng()
 Random.seed!(rng, 0)
 
 # add a gaussian noise to the data
-σ = 0.05
+σ = 0.0
 max_oscillations = [maximum(sol_as_array[i,1:end]) - minimum(sol_as_array[i,1:end]) for i in 1:size(sol_as_array, 1)]
 
 max_oscillations = [mean(sol_as_array[i,1:end]) for i in 1:size(sol_as_array, 1)]

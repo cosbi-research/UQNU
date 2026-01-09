@@ -47,7 +47,8 @@ function get_uode_model_function(appr_neural_network, state, lower_bounds, upper
     f(du, u, p, t) =
         let appr_neural_network = appr_neural_network, st = state, lower_bounds = lower_bounds, upper_bounds = upper_bounds
              
-            
+            u = max.(min.(u, 10^5), 0.0) # to avoid negative concentrations
+
             ode_par = p.ode_par.*(upper_bounds .- lower_bounds) .+ lower_bounds
 
             û = appr_neural_network(view(u, [1, 4, 5, 6, 7, 8]), p.p_net, st)[1]# Network prediction

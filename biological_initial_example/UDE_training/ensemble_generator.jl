@@ -34,12 +34,12 @@ regularization = 4
 regularization_coefficient_1 = 0.0
 regularization_coefficient_2 = 0.0
 #gain for initialization
-gain = 0.01
+gain = 1.0
 # error level, 0: no error, 1: error
 number_ensembles = 5
 number_threads = 5
 output_folder = "cell_apop_UDE_results"
-hyper_ms_segment = 5
+hyper_ms_segment = 20
 hyper_ms_lambda = 0.0
 
 #print the arguments to check their correctness
@@ -75,8 +75,8 @@ out_dim = 1
 include("../cell_apoptosis_settings/cell_apop_model_functions.jl")
 include("../cell_apoptosis_settings/cell_apop_model_settings.jl")
 
-upper_parameter_boundaries = original_parameters * 1.1
-lower_parameter_boundaries = original_parameters * 0.9
+upper_parameter_boundaries = original_parameters * 2.0
+lower_parameter_boundaries = original_parameters * 0.5
 original_ude_parameters = ones(length(original_parameters))
 
 solutions_dataframe = deserialize(datafile)
@@ -106,12 +106,15 @@ approximating_neural_network = Lux.Chain(
   Lux.Dense(neural_network_dimension, out_dim; init_weight=my_glorot_uniform, init_bias=my_glorot_uniform),
 )
 
-max_oscillations = [maximum(training_dataframe[1:end, i]) - minimum(training_dataframe[1:end, i]) for i in 2:(size(training_dataframe, 2)-1)]
+max_oscillations = [maximum(training_dataframe[1:end, i]) - minimum(training_dataframe[1:end, i]) for i in 2:(size(training_dataframe, 2))]
 
 
 solution_dataframes = [solutions_dataframe,]
 training_dataframes = [training_dataframe,]
 validation_dataframes = [validation_dataframe,]
+max_oscillations = [max_oscillations,]
+
+observables = [4,]
 
 
 ###################
@@ -137,7 +140,7 @@ function train(approximating_neural_network, training_dataframes, validation_dat
 
   #loss function for the comparison among the parameters and the predictions
   function loss_function(data, pred, max_oscillation)
-    original_cost = sum(abs2.(data .- pred) ./ abs2.(max_oscillation))
+    original_cost = sum(abs2.(data[observables, :] .- pred[observables, :]) ./ abs2.(max_oscillation[observables]))
     return 1 / size(data, 2) * original_cost
   end
 
@@ -261,9 +264,9 @@ function train(approximating_neural_network, training_dataframes, validation_dat
     epochs = push!(epochs, epoch)
 
     #check if it takes more than 20 minutes
-    if Dates.now() - current_time > Dates.Minute(150)
-      error("Time limit reached")
-    end
+    #if Dates.now() - current_time > Dates.Minute(150)
+    #  error("Time limit reached")
+    #end
 
     #validation prediction 
     prob_uode_pred_tmp_1 = remake(prob_uode_pred, u0=θ.u.u0[1, :, 1])
@@ -272,6 +275,27 @@ function train(approximating_neural_network, training_dataframes, validation_dat
     val_loss_1 = loss_function(Array(validation_dataframes[1][:, 2:(end)])', model_prediction_1, max_oscillation)
 
     val_loss = val_loss_1
+
+    #plot the simulations 
+    prob_uode_pred_tmp_plot = remake(prob_uode_pred, u0=θ.u.u0[1, :, 1])
+    model_prediction_plot = solve(prob_uode_pred_tmp_1, integrator, abstol=abstol, reltol=reltol, saveat=0.01, p=θ.u.p)
+    model_prediction_plot_as_array = Array(model_prediction_plot)
+
+    variable_plots = []
+    for var_index in 1:(size(training_dataframes[1], 2)-1)
+      p = Plots.plot(title="Training Data vs Model Prediction - Variable " * string(var_index), xlabel="Time", ylabel="Value", legend = nothing)
+      scatter!(p, training_dataframes[1].t, training_dataframes[1][!, var_index+1], label="Training Data", markersize=3)
+      #plot the experimental data
+      Plots.scatter!(p, model_prediction_plot.t, model_prediction_plot_as_array[var_index,:], label="Experimental Data", lw=2, linecolor=:black)
+      push!(variable_plots, p)
+    end
+
+    #put them together
+    plot_layout = @layout [a b; c d; e f; g h]
+    combined_plot = Plots.plot(variable_plots..., layout=plot_layout, size=(1200, 800))
+
+    #display 
+    display(combined_plot)
 
     push!(validation_losses, val_loss)
 
@@ -429,13 +453,13 @@ function train(approximating_neural_network, training_dataframes, validation_dat
   epochs = [0]
 
   ##################### ADAM ###########
-  res = Optimization.solve(optprob, opt, callback=(θ, l) -> callback(θ, l, ms_hyperparameters, validation_losses, epochs), maxiters=10)
+  res = Optimization.solve(optprob, opt, callback=(θ, l) -> callback(θ, l, ms_hyperparameters, validation_losses, epochs), maxiters=100)
   
   optprob2 = Optimization.OptimizationProblem(optf_2, res.u)
   best_on_validation = [res.u]
   validation_losses = [validation_losses[end]]
   epochs = [0]
-  res = Optimization.solve(optprob2, Optim.LBFGS(), callback=(θ, l) -> callback2(θ, l, validation_losses, epochs, best_on_validation), maxiters=5)
+  res = Optimization.solve(optprob2, Optim.LBFGS(), callback=(θ, l) -> callback2(θ, l, validation_losses, epochs, best_on_validation), maxiters=50)
 
   likelihood = validation_losses[end]
 
