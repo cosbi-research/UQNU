@@ -40,7 +40,7 @@ number_ensembles = 5
 number_threads = 5
 output_folder = "cell_apop_UDE_results"
 hyper_ms_segment = 20
-hyper_ms_lambda = 0.0
+hyper_ms_lambda = 0.01
 
 #print the arguments to check their correctness
 println("learning_rate_adam = ", learning_rate_adam)
@@ -153,8 +153,8 @@ function train(approximating_neural_network, training_dataframes, validation_dat
           p=θ.p,
           tspan=(hyperparameters.tsteps[first(rg)], hyperparameters.tsteps[last(rg)]),
           #u0=θ.u0[:, first(rg)]
-          #u0=θ.u0[i, :, first(rg)]
-          u0=u0_original[i, :, first(rg)]
+          u0=θ.u0[i, :, first(rg)]
+          #u0=u0_original[i, :, first(rg)]
         ),
         integrator;
         saveat=tsteps[rg],
@@ -223,8 +223,8 @@ function train(approximating_neural_network, training_dataframes, validation_dat
         prob_uode_pred;
         p=θ.p,
         tspan=tspan,
-        #u0=θ.u0[i, :, 1]
-        u0=u0_original[i, :, 1]
+        u0=max.(θ.u0[i, :, 1], 0.0)
+        #u0=u0_original[i, :, 1]
       ),
       integrator;
       saveat=training_dataframes[1].t,
@@ -269,7 +269,7 @@ function train(approximating_neural_network, training_dataframes, validation_dat
     #end
 
     #validation prediction 
-    prob_uode_pred_tmp_1 = remake(prob_uode_pred, u0=θ.u.u0[1, :, 1])
+    prob_uode_pred_tmp_1 = remake(prob_uode_pred, u0=max.(θ.u.u0[1, :, 1], 0.0))
     model_prediction_1 = solve(prob_uode_pred_tmp_1, integrator, abstol=abstol, reltol=reltol, saveat=validation_dataframes[1].t, p=θ.u.p)
     max_oscillation = max_oscillations[1]
     val_loss_1 = loss_function(Array(validation_dataframes[1][:, 2:(end)])', model_prediction_1, max_oscillation)
@@ -352,7 +352,7 @@ function train(approximating_neural_network, training_dataframes, validation_dat
           tspan=(hyperparameters.tsteps[first(rg)], hyperparameters.tsteps[last(rg)]),
           #u0=θ.u0[:, first(rg)]
           #u0=θ.u0[i, :, first(rg)]
-          u0=θ.u.u0[i, :, first(rg)]
+          u0=max.(θ.u.u0[i, :, first(rg)], 0.0)
         ),
         integrator;
         saveat=tsteps[rg],
@@ -383,7 +383,9 @@ function train(approximating_neural_network, training_dataframes, validation_dat
 
     #display 
     display(combined_plot)
-
+    
+    val_loss = Inf 
+    push!(validation_losses, val_loss)
 
     #= #check if it takes more than 20 minutes
     if Dates.now() - current_time > Dates.Minute(150)
@@ -397,9 +399,6 @@ function train(approximating_neural_network, training_dataframes, validation_dat
     val_loss_1 = loss_function(Array(validation_dataframes[1][:, 2:(end)])', model_prediction_1, max_oscillation)
 
     val_loss = val_loss_1
-
-    push!(validation_losses, val_loss)
-
     if epoch % 20 == 0
 
       regularization_loss = 0.0
@@ -427,6 +426,11 @@ function train(approximating_neural_network, training_dataframes, validation_dat
 
   u0 = zeros(1, size(u0_1, 1), size(u0_1, 2))
   u0[1, :, :] = u0_1
+
+  #take just the initial point for the trajectories not observables
+  u0[1, setdiff(1:size(u0, 2), observables), :] .= u0_1[setdiff(1:size(u0_1, 1), observables), 1][:, 1]
+
+
 
   u0_original = deepcopy(u0)
 
@@ -490,7 +494,7 @@ function train(approximating_neural_network, training_dataframes, validation_dat
     #gain for initialization
     gain=gain,
     # error level, 0: no error, 1: error
-    error_level=error_level,
+    #error_level=error_level,
     validation_likelihood=likelihood,
     status="success"
   )
@@ -503,7 +507,7 @@ ensemble_results = []
 #lock_results = ReentrantLock()
 #global process_launched = Set()
 #Threads.@threads for iterator in 1:
-number_ensembles = 1
+number_ensembles = 50
 for iterator in 1:number_ensembles
   random_seed = nothing
   try
@@ -530,7 +534,7 @@ end
 
 println("Saving the results")
 try 
-  filename = output_folder * "/ensemble_results_model_" * string(model) * "_gain_"*string(gain)* "_reg_"*string(regularization)*"_"*string(regularization_coefficient_1)*".jld"
+  filename = output_folder * "/ensemble_results.jld"
   serialize(filename, ensemble_results)
   println(filename)
 catch e

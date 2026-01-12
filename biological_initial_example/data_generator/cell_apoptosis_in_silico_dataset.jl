@@ -52,13 +52,14 @@ rng = Random.default_rng()
 Random.seed!(rng, 0)
 
 # add a gaussian noise to the data
-σ = 0.0
+σ = 0.05
 max_oscillations = [maximum(sol_as_array[i,1:end]) - minimum(sol_as_array[i,1:end]) for i in 1:size(sol_as_array, 1)]
 
 max_oscillations = [mean(sol_as_array[i,1:end]) for i in 1:size(sol_as_array, 1)]
 max_oscillations = repeat(max_oscillations, 1, size(sol_as_array, 2))
 noise_std = σ * max_oscillations
 sol_as_array_noisy = sol_as_array .+ noise_std .* randn(size(sol_as_array))
+sol_as_array_noisy = max.(sol_as_array_noisy, 0.0) #to avoid negative concentrations
 
 #save in a dataframe the noisy simulation
 df = DataFrame(t = times, x1 = sol_as_array_noisy[1,:],
