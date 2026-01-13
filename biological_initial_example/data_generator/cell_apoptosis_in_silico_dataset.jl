@@ -35,8 +35,13 @@ reltol = 1e-6
 
 #generate the data
 prob = ODEProblem(ground_truth_function, original_u0_survival, (initial_time_training, end_time_training), original_parameters)
-sol_survival = solve(prob, integrator, u0=original_u0_survival, saveat=times, reltol=reltol, abstol=abstol)
 sol_death = solve(prob, integrator, u0=original_u0_death, saveat=times, reltol=reltol, abstol=abstol)
+
+end_time_training = 25.0f0
+times_new = range(initial_time_training, end_time_training, length=120)
+prob = ODEProblem(ground_truth_function, original_u0_survival, (initial_time_training, end_time_training), original_parameters)
+sol_survival = solve(prob, integrator, u0=original_u0_survival, saveat=times_new, reltol=reltol, abstol=abstol)
+
 
 plot_survival = Plots.plot(sol_survival, xlabel="Time (hours)", ylabel="Cell populations (normalized)", title="Cell populations over time (Survival Initial Condition)")
 Plots.savefig(plot_survival, "cell_populations_over_time_survival_initial_condition.png")
@@ -81,3 +86,34 @@ Plots.scatter!(plt, df.t, df.x4, label="Noisy simulation")
 
 
 Plots.savefig(plt, "fourth_variable_training_dataset.png")
+
+
+#training dataset over the cell death
+sol_as_array = Array(sol_survival)
+
+rng = Random.default_rng()
+Random.seed!(rng, 0)
+
+# add a gaussian noise to the data
+σ = 0.0
+max_oscillations = [maximum(sol_as_array[i,1:end]) - minimum(sol_as_array[i,1:end]) for i in 1:size(sol_as_array, 1)]
+
+max_oscillations = [mean(sol_as_array[i,1:end]) for i in 1:size(sol_as_array, 1)]
+max_oscillations = repeat(max_oscillations, 1, size(sol_as_array, 2))
+noise_std = σ * max_oscillations
+sol_as_array_noisy = sol_as_array .+ noise_std .* randn(size(sol_as_array))
+sol_as_array_noisy = max.(sol_as_array_noisy, 0.0) #to avoid negative concentrations
+
+#save in a dataframe the noisy simulation
+df = DataFrame(t = times_new, x1 = sol_as_array_noisy[1,:],
+                     x2 = sol_as_array_noisy[2,:],
+                     x3 = sol_as_array_noisy[3,:],
+                     x4 = sol_as_array_noisy[4,:],
+                     x5 = sol_as_array_noisy[5,:],
+                     x6 = sol_as_array_noisy[6,:],
+                     x7 = sol_as_array_noisy[7,:],
+                     x8 = sol_as_array_noisy[8,:]
+                     )
+
+#save the data
+serialize("cell_apoptosis_silico_data_survival.jld", df)

@@ -145,6 +145,9 @@ function train(approximating_neural_network, training_dataframes, validation_dat
   end
 
   function loss_on_trajectory(θ, hyperparameters, i)
+
+    #.u0[1, :, 1] = u0_original[1, :, 1]
+
     # Multiple shooting predictions
     sols = [
       solve(
@@ -217,14 +220,13 @@ function train(approximating_neural_network, training_dataframes, validation_dat
     # Multiple shooting predictions
 
     tspan = extrema(training_dataframes[i].t)
-
+    
     sol = Array(solve(
       remake(
         prob_uode_pred;
         p=θ.p,
         tspan=tspan,
-        u0=max.(θ.u0[i, :, 1], 0.0)
-        #u0=u0_original[i, :, 1]
+        u0=u0_original[1, :, 1]
       ),
       integrator;
       saveat=training_dataframes[1].t,
@@ -267,6 +269,9 @@ function train(approximating_neural_network, training_dataframes, validation_dat
     #if Dates.now() - current_time > Dates.Minute(150)
     #  error("Time limit reached")
     #end
+
+    θ.u.u0[1, :, 1] = u0_original[1, :, 1]
+
 
     #validation prediction 
     prob_uode_pred_tmp_1 = remake(prob_uode_pred, u0=max.(θ.u.u0[1, :, 1], 0.0))
@@ -341,6 +346,9 @@ function train(approximating_neural_network, training_dataframes, validation_dat
 
     epoch = maximum(epochs)+1
     epochs = push!(epochs, epoch)
+
+
+    θ.u.u0[1, :, 1] = u0_original[1, :, 1]
 
     #check the simulations 
     i = 1
@@ -430,8 +438,6 @@ function train(approximating_neural_network, training_dataframes, validation_dat
   #take just the initial point for the trajectories not observables
   u0[1, setdiff(1:size(u0, 2), observables), :] .= u0_1[setdiff(1:size(u0_1, 1), observables), 1][:, 1]
 
-
-
   u0_original = deepcopy(u0)
 
   par = ComponentVector(
@@ -507,13 +513,18 @@ ensemble_results = []
 #lock_results = ReentrantLock()
 #global process_launched = Set()
 #Threads.@threads for iterator in 1:
-number_ensembles = 50
+number_ensembles = 53
 for iterator in 1:number_ensembles
   random_seed = nothing
   try
     println("******************************** Starting ensemble ", iterator)
     flush(stdout)
     random_seed = abs(rand(rng, Int))
+
+    if iterator != 44
+      continue
+    end
+
     global process_launched
     result = train(approximating_neural_network, training_dataframes, validation_dataframes, solution_dataframes, rng, learning_rate_adam, integrator, abstol, reltol, sensealg, random_seed)
     #lock(lock_results)
@@ -534,7 +545,7 @@ end
 
 println("Saving the results")
 try 
-  filename = output_folder * "/ensemble_results.jld"
+  filename = output_folder * "/ensemble_results_prova_1.jld"
   serialize(filename, ensemble_results)
   println(filename)
 catch e
