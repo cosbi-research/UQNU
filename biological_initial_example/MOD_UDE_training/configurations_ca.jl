@@ -1,43 +1,50 @@
 # configuration file for the integration and the neural network
 
 # numerical integrator
-integrator = Vern7()
-abstol = 1e-6
-reltol = 1e-5
-sensealg = InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true))
+integrator = TRBDF2(autodiff=true);
+abstol = 1e-7
+reltol = 1e-6
+sensealg = QuadratureAdjoint(autojacvec=ReverseDiffVJP(true))
 
-get_uode_model_function = function (appr_neural_network, state, original_parameters)
+function get_uode_model_function(appr_neural_network, state, original_parameters)
     #generates the function with the parameters
     f(du, u, p, t) =
         let appr_neural_network = appr_neural_network, st = state, original_parameters = original_parameters
-            #@infiltrate
-            û = appr_neural_network(u, p.p_net, st)[1]
-            @inbounds du[1] = (p.α * original_parameters[1]) * u[1] + û[1]
-            @inbounds du[2] = û[2] - (p.δ * original_parameters[2]) * u[2]
+             
+            u = max.(min.(u, 10^5), 0.0) # to avoid negative concentrations
+
+            ode_par = p.ode_par.* original_parameters
+
+            û = appr_neural_network(view(u, [1, 4, 5, 6, 7, 8]), p.p_net, st)[1]# Network prediction
+            @inbounds du[1] = -ode_par[1]*u[4]*u[1] + ode_par[2]*u[5]
+            @inbounds du[2] = ode_par[3]*u[5] - ode_par[4]*u[2]*u[3] + ode_par[5]*u[6] + ode_par[6]*u[6]
+            @inbounds du[3] = -ode_par[4]*u[2]*u[3] + ode_par[5]*u[6]
+            @inbounds du[4] = û[1]
+            @inbounds du[5] = -ode_par[3]*u[5] + ode_par[1]*u[4]*u[1] - ode_par[2]*u[5]
+            @inbounds du[6] = -ode_par[6]*u[6] + ode_par[4]*u[2]*u[3] - ode_par[5]*u[6]
+            @inbounds du[7] = max(min(-ode_par[7]*u[7]*u[4] + ode_par[8]*u[8] + ode_par[9]*u[8], 10^5), -10^5)
+            @inbounds du[8] = max(min(ode_par[7]*u[7]*u[4] - ode_par[8]*u[8] - ode_par[9]*u[8], 10^5), -10^5)
         end
 end
-
-get_uode_fixed_model_function = function (appr_neural_network, state, original_parameters)
-    #generates the function with the parameters
-    f(du, u, p, t) =
-        let appr_neural_network = appr_neural_network, st = state, original_parameters = original_parameters
-            #@infiltrate
-            û = appr_neural_network(u, p.p_net, st)[1]
-            @inbounds du[1] = (original_parameters[1]) * u[1] + û[1]
-            @inbounds du[2] = û[2] - (original_parameters[2]) * u[2]
-        end
-end
-
 
 get_vector_field_function = function (appr_neural_network, state, original_parameters)
     #generates the function with the parameters
     f(u, p) =
-        let approximating_neural_network = appr_neural_network, st = state, original_parameters = original_parameters
+        let appr_neural_network = appr_neural_network, st = state, original_parameters = original_parameters
             #@infiltrate
-            û = approximating_neural_network(u, p.p_net, st)[1]
-            du_1 = (p.α * original_parameters[1]) * u[1,:] .+ û[1,:]
-            du_2 = û[2,:] .- (p.δ * original_parameters[2]) * u[2,:]
-            return [du_1'; du_2']
+            ode_par = p.ode_par.* original_parameters
+
+            û = appr_neural_network(view(u, [1, 4, 5, 6, 7, 8]), p.p_net, st)[1]# Network prediction
+            du_1 = -ode_par[1]*u[4]*u[1] + ode_par[2]*u[5]
+            du_2 = ode_par[3]*u[5] - ode_par[4]*u[2]*u[3] + ode_par[5]*u[6] + ode_par[6]*u[6]
+            du_3 = -ode_par[4]*u[2]*u[3] + ode_par[5]*u[6]
+            du_4 = û[1]
+            du_5 = -ode_par[3]*u[5] + ode_par[1]*u[4]*u[1] - ode_par[2]*u[5]
+            du_6 = -ode_par[6]*u[6] + ode_par[4]*u[2]*u[3] - ode_par[5]*u[6]
+            du_7 = max(min(-ode_par[7]*u[7]*u[4] + ode_par[8]*u[8] + ode_par[9]*u[8], 10^5), -10^5)
+            du_8 = max(min(ode_par[7]*u[7]*u[4] - ode_par[8]*u[8] - ode_par[9]*u[8], 10^5), -10^5)
+
+            return [du_1'; du_2'; du_3'; du_4'; du_5'; du_6'; du_7'; du_8']
         end
 end
 
