@@ -521,10 +521,6 @@ for iterator in 1:number_ensembles
     flush(stdout)
     random_seed = abs(rand(rng, Int))
 
-    if iterator != 44
-      continue
-    end
-
     global process_launched
     result = train(approximating_neural_network, training_dataframes, validation_dataframes, solution_dataframes, rng, learning_rate_adam, integrator, abstol, reltol, sensealg, random_seed)
     #lock(lock_results)
@@ -545,7 +541,7 @@ end
 
 println("Saving the results")
 try 
-  filename = output_folder * "/ensemble_results_prova_1.jld"
+  filename = output_folder * "/ensemble_results.jld"
   serialize(filename, ensemble_results)
   println(filename)
 catch e
