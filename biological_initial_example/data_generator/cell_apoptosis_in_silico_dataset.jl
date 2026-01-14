@@ -80,6 +80,30 @@ df = DataFrame(t = times, x1 = sol_as_array_noisy[1,:],
 #save the data
 serialize("cell_apoptosis_silico_data.jld", df)
 
+# add a gaussian noise to the data
+σ = 0.0
+max_oscillations = [maximum(sol_as_array[i,1:end]) - minimum(sol_as_array[i,1:end]) for i in 1:size(sol_as_array, 1)]
+
+max_oscillations = [mean(sol_as_array[i,1:end]) for i in 1:size(sol_as_array, 1)]
+max_oscillations = repeat(max_oscillations, 1, size(sol_as_array, 2))
+noise_std = σ * max_oscillations
+sol_as_array_noisy = sol_as_array .+ noise_std .* randn(size(sol_as_array))
+sol_as_array_noisy = max.(sol_as_array_noisy, 0.0) #to avoid negative concentrations
+
+#save in a dataframe the noisy simulation
+df = DataFrame(t = times, x1 = sol_as_array_noisy[1,:],
+                     x2 = sol_as_array_noisy[2,:],
+                     x3 = sol_as_array_noisy[3,:],
+                     x4 = sol_as_array_noisy[4,:],
+                     x5 = sol_as_array_noisy[5,:],
+                     x6 = sol_as_array_noisy[6,:],
+                     x7 = sol_as_array_noisy[7,:],
+                     x8 = sol_as_array_noisy[8,:]
+                     )
+
+#save the data
+serialize("cell_apoptosis_silico_data_no_noise.jld", df)
+
 #plot the fourth variable, pure and in the noise dataframe
 plt = Plots.plot(sol_death.t, sol_as_array[4, :], label="Pure simulation", xlabel="Time (hours)", ylabel="Concentration of Active Caspase-3", title="Active Caspase-3 dynamics")
 Plots.scatter!(plt, df.t, df.x4, label="Noisy simulation")
