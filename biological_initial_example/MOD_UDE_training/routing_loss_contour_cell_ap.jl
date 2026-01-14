@@ -7,12 +7,15 @@ using Logging, StatsBase
 
 loglevel = Logging.Info
 global_logger(ConsoleLogger(stderr, loglevel))
-debug_folder = "debug_damped"
-result_folder = "result_damped"
+debug_folder = "debug_ca"
+result_folder = "result_ca"
+
+maxiters = 1000
 
 #parse the starting point index 
-#starting_point_index = 1
-starting_point_index = parse(Int, ARGS[1])
+starting_point_index = 1
+#TODO ripristinare
+#starting_point_index = parse(Int, ARGS[1])
 @info "Starting point index: " starting_point_index
 
 result_folder = result_folder * string(starting_point_index)
@@ -22,6 +25,7 @@ debug_folder = debug_folder * string(starting_point_index)
 if !isdir(result_folder)
   mkdir(result_folder)
 end
+
 
 if !isdir(debug_folder)
   mkdir(debug_folder)
@@ -36,7 +40,6 @@ ensemble_interval_end = (starting_point_index - 1) * 5 + 1 + 4
 # Extract one random number from the interval
 starting_point_index = rand(ensemble_interval_begin:ensemble_interval_end)
 
-maxiters = 1000
 
 include("ConfidenceEllipse.jl")
 using .ConfidenceEllipse
@@ -44,23 +47,35 @@ using .ConfidenceEllipse
 include("diagnostic_training_set.jl")
 using .diagnostic_training_set
 
-include("configurations_damped.jl")
+include("configurations_ca.jl")
 
 ################################### loads the data ##############################################
-training_data_structure = deserialize("./data_generator/damped_oscillator_training_data_structure_err_1.jld")
-bounding_box = deserialize("./data_generator/damped_oscillator_in_silico_data_bounding_box.jld")
+training_data_structure = deserialize("./data_generator/lotka_volterra_training_data_structure_err_1.jld")
+
+
+bounding_box = deserialize("./data_generator/lotka_volterra_in_silico_data_bounding_box.jld")
 #generate a grid 100*100
 xrange_bounding_box = range(bounding_box[1], bounding_box[2], length=10)
 yrange_bounding_box = range(bounding_box[3], bounding_box[4], length=10)
 
 ################################### loads the single-result #####################################
 #load the result of the single-parameter training
-trained_ensemble = deserialize("training_NODE_results/damped/ensemble_results_model_3_with_seed.jld")
+trained_ensemble = deserialize("training_UDE_results/lv/ensemble_results_model_1_with_seed.jld")
 #sort them according to status and validation likelihood
-trained_ensemble = [res for res in trained_ensemble if res.status == "success"]
+trained_ensemble = [res for res in trained_ensemble]
 single_parameter_training = trained_ensemble[starting_point_index]
 
+lower_bounds = single_parameter_training.lower_parameter_boundaries
+upper_bounds = single_parameter_training.upper_parameter_boundaries
+
 parameters = deepcopy(single_parameter_training.training_res.p)
+original_α = parameters.α * (upper_bounds[1] - lower_bounds[1]) + lower_bounds[1]
+original_δ = parameters.δ * (upper_bounds[2] - lower_bounds[2]) + lower_bounds[2]
+
+parameters.α = 1.0
+parameters.δ = 1.0
+
+original_parameters_ude = [original_α, original_δ]
 
 naive_ensemble_reference = [res.training_res.p for res in trained_ensemble[ensemble_interval_begin:ensemble_interval_end]]
 
@@ -68,8 +83,11 @@ naive_ensemble_reference = [res.training_res.p for res in trained_ensemble[ensem
 p_net, st = Lux.setup(rng, approximating_neural_network)
 tspan = extrema(training_data_structure.solution_dataframes[1].t)
 
-uode_derivative_function = get_uode_model_function(approximating_neural_network, st)
-vector_field_function = get_vector_field_function(approximating_neural_network, st)
+lower_bounds = single_parameter_training.lower_parameter_boundaries
+upper_bounds = single_parameter_training.upper_parameter_boundaries
+
+uode_derivative_function = get_uode_model_function(approximating_neural_network, st, original_parameters_ude)
+vector_field_function = get_vector_field_function(approximating_neural_network, st, original_parameters_ude)
 
 prob_uode_pred = ODEProblem{true}(uode_derivative_function, Array(training_data_structure.solution_dataframes[1][1, 2:(end-1)]), tspan)
 initial_states = deepcopy(single_parameter_training.training_res.u0)
@@ -88,11 +106,14 @@ for i in 1:3
   end
 end
 
-ood_analyzer = out_of_domain_variability.out_of_domain_var(xrange_bounding_box, yrange_bounding_box, vector_field_function, damped_oscillator_ground_truth, experimental_points, [], [], [])
+ood_analyzer = out_of_domain_variability.out_of_domain_var(xrange_bounding_box, yrange_bounding_box, vector_field_function, lotka_volterra_gound_truth, experimental_points, [], [], [])
 out_of_domain_variability.computeGroundTruth(ood_analyzer)
 out_of_domain_variability.computePoints(ood_analyzer)
 
 out_of_domain_points = ood_analyzer.points
+
+#get the distance between the training domain and the out of domain points
+distances_from_training_set = out_of_domain_variability.getOutOfDomainDistance(ood_analyzer)
 
 function model_simulation(θ, t, trajectory, initial_states, integrator=integrator, sensealg=sensealg, prob_uode_pred=prob_uode_pred)
   if trajectory == 1
@@ -108,7 +129,7 @@ function model_simulation(θ, t, trajectory, initial_states, integrator=integrat
       reltol=reltol,
       abstol=abstol,
       sensealg=sensealg,
-      maxiters = maxiters
+      maxiters=maxiters
     )
   elseif trajectory == 2
     trajectory_sol = solve(
@@ -123,7 +144,7 @@ function model_simulation(θ, t, trajectory, initial_states, integrator=integrat
       reltol=reltol,
       abstol=abstol,
       sensealg=sensealg,
-      maxiters = maxiters
+      maxiters=maxiters
     )
   elseif trajectory == 3
     trajectory_sol = solve(
@@ -138,7 +159,7 @@ function model_simulation(θ, t, trajectory, initial_states, integrator=integrat
       reltol=reltol,
       abstol=abstol,
       sensealg=sensealg,
-      maxiters = maxiters
+      maxiters=maxiters
     )
   end
 
@@ -280,13 +301,18 @@ function costFunction(par, integrator, sensealg, prob_uode_tmp)
   return cost
 end
 
-function getReoptimizedParameters(par, integrator=integrator, sensealg=sensealg)
+function getReoptimizedParameters(par, integrator, sensealg)
 
   @info "Re-optimizing the parameters"
 
   adtype = Optimization.AutoZygote()
 
-  optf = Optimization.OptimizationFunction((x, p) -> costFunction(x, integrator, sensealg, prob_uode_pred), adtype)
+  original_parameters_ude_fixed = [original_parameters_ude[1] * par.α, original_parameters_ude[2] * par.δ] 
+
+  uode_derivative_function_fixed = get_uode_fixed_model_function(approximating_neural_network, st, original_parameters_ude_fixed)
+  prob_uode_pred_fixed = ODEProblem{true}(uode_derivative_function_fixed, Array(training_data_structure.solution_dataframes[1][1, 2:(end-1)]), tspan)
+
+  optf = Optimization.OptimizationFunction((x, p) -> costFunction(x, integrator, sensealg, prob_uode_pred_fixed), adtype)
   optprob = Optimization.OptimizationProblem(optf, par)
 
 
@@ -328,25 +354,15 @@ function getReoptimizedParameters(par, integrator=integrator, sensealg=sensealg)
 end
 
 function flatten(min_x_square, min_y_square, max_x_square, max_y_square, rows, cols)
-
   flattened_positions = []
-
   for x in min_x_square:max_x_square
-
     for y in min_y_square:max_y_square
-
       # Convert 2D (x, y) position to 1D flattened index
-
       index = (x - 1) * cols + y
-
       push!(flattened_positions, index)
-
     end
-
   end
-
   return flattened_positions
-
 end
 
 function getVarianceGradient(par, points, total_ensemble, ood_analyzer)
@@ -505,6 +521,7 @@ function getNextPointDirection(par, times, initial_states, training_data_structu
   #get the sloppy directions
   sloppy_eigenvectors = eigenDecomposition.vectors[:, eigenvalues.<1e-1]
 
+  gradient_variance = nothing
   if length(current_ensemble) < 3 || iterator < 100
     gradient_variance = getVarianceGradient(par, out_of_domain_points, current_ensemble, ood_analyzer)
   else
@@ -529,6 +546,8 @@ function getNextPointDirection(par, times, initial_states, training_data_structu
   projection = sloppy_eigenvectors * sloppy_eigenvectors' * gradient_variance
   projection[Not(parameter_index)] .= 0.0
 
+  #normalize the direction
+  #direction = projection ./ sqrt(sum(projection .^ 2))
 
   #gradient clipping 
   if sqrt(sum(projection .^ 2)) > 10
@@ -539,9 +558,7 @@ function getNextPointDirection(par, times, initial_states, training_data_structu
 end
 
 function getValidationCost(pars, initial_states)
-
   cost = 0.0
-
   for i in 1:3
     #tmp_times = vcat(0, training_data_structure.validation_dataframes[i].t)
     tmp_times = training_data_structure.solution_dataframes[i].t
@@ -555,7 +572,6 @@ function getValidationCost(pars, initial_states)
     #cost_trajectory = 1 / size(training_data_structure.validation_dataframes[i], 1) * (sum((simulation[1, :] - training_data_structure.validation_dataframes[i].x1) .^ 2 ./ training_data_structure.max_oscillations[i][1]^2) + sum((simulation[2, :] - training_data_structure.validation_dataframes[i].x2) .^ 2 ./ training_data_structure.max_oscillations[i][2]^2))
     cost_trajectory = 1 / size(training_data_structure.solution_dataframes[i], 1) * (sum((simulation[1, :] - training_data_structure.solution_dataframes[i].x1) .^ 2 ./ training_data_structure.max_oscillations[i][1]^2) + sum((simulation[2, :] - training_data_structure.solution_dataframes[i].x2) .^ 2 ./ training_data_structure.max_oscillations[i][2]^2))
     cost += cost_trajectory
-
   end
   return cost
 end
@@ -563,7 +579,6 @@ end
 #naive implementation of monte-carlo sampling
 number_iterations_for_trajectory = 800
 validation_cost_threshold = 1e-3
-momentum = 0.0
 
 parameter_populations = [parameters .+ 0.0]
 
@@ -584,15 +599,17 @@ selected_points = out_of_domain_points
 #selected_points = selected_points[:, 1:10]
 
 #each trajectory moves along a specific subspace
-total_parameter_indexes = 1:(length(parameters))
+total_parameter_indexes = 1:(length(parameters)-2)
 sampled_indexes_trajectories = [sort(sample(total_parameter_indexes, 200; replace=false)) for i in 1:number_of_trajectories]
 #put always the last two indexes
+sampled_indexes_trajectories = [vcat(sampled_indexes_trajectories[i], length(parameters) - 1, length(parameters)) for i in 1:number_of_trajectories]
 
 #check the validation cost before, if it's more than the threshold exit immediately
 
 @info "Checking initial validation cost"
 
 initial_cost = getValidationCost(parameters, initial_states)
+
 if initial_cost > validation_cost_threshold
   ensemble_interval_begin = (ensemble_selected - 1) * 5 + 1
   ensemble_interval_end = (ensemble_selected - 1) * 5 + 1 + 4
@@ -620,16 +637,13 @@ if initial_cost > validation_cost_threshold
     naive_ensemble_number=ensemble_selected,
     naive_ensemble_reference=naive_ensemble_reference
   )
-
   serialize(result_folder * "/results.jld", results)
 else
-
   for traj_number in 1:number_of_trajectories
 
     try
 
       iteration_performed = 0
-
 
       current_trajectory = []
       validation_costs = []
@@ -638,22 +652,19 @@ else
       cicps = []
       reprojection_trajectory = 0
 
-      while iteration_performed < 200
-
+      while iteration_performed < 3
 
         current_trajectory = []
         validation_costs = []
         current_ensemble = [parameters .+ 0.0]
         current_variances = []
+        cicps = []
         reprojection_trajectory = 0
 
         sampled_index_for_trajectory = sampled_indexes_trajectories[traj_number]
         step_size = 1.0
-
         min_step_size = 1e-3
         max_step_size = 10^2
-
-        cicps = []
 
         iteration_performed = 0
 
@@ -675,6 +686,7 @@ else
             sampled_indexes = sort(sampled_indexes)
             tmp_times = times[sampled_indexes]
             new_suggestion_direction = getNextPointDirection(current_ensemble[end], tmp_times, initial_states, training_data_structure, selected_points, current_ensemble, ood_analyzer, sampled_index_for_trajectory, step_size, nothing, iterator)
+
 
             @info "Norm of th direction: " * string(sqrt(sum(new_suggestion_direction .^ 2)))
 
@@ -856,6 +868,7 @@ else
           @info "Population size: " length(parameter_populations)
           @info "Current ensemble size: " length(current_ensemble)
           @info "Average variance: " variance
+          @info "Physical parameters values: " * string(new_suggestion.α) * ", " * string(new_suggestion.δ) * ", original values " * string(original_parameters.α) * ", " * string(original_parameters.δ)
 
           push!(current_variances, variance)
 
@@ -919,11 +932,12 @@ else
   #reprojection of the ensemble if it is possible
 
   new_ensemble = []
+
   for ensemble_it in axes(ensemble, 1)
     new_member = deepcopy(ensemble[ensemble_it])
     if ensemble_it > 1
       try
-        new_member = getReoptimizedParameters(ensemble[ensemble_it])
+        new_member = getReoptimizedParameters(ensemble[ensemble_it], integrator, sensealg)
         validation_cost = getValidationCost(new_member, initial_states)
         push!(total_validation_costs[ensemble_it-1], validation_cost)
       catch e
@@ -935,6 +949,23 @@ else
     #reoptimize
   end
 
+  #saving the ensemble with the actual physicial parameters
+  for i in axes(ensemble, 1)
+    ensemble[i].α = original_α * ensemble[i].α
+    ensemble[i].δ = original_δ * ensemble[i].δ
+  end
+
+  #saving the reprojected enesmble with the actual physical parameters
+  for i in axes(new_ensemble, 1)
+    new_ensemble[i].α = original_α * new_ensemble[i].α
+    new_ensemble[i].δ = original_δ * new_ensemble[i].δ
+  end
+
+  #saving the original ensemble with the actual physical parameters
+  for i in axes(naive_ensemble_reference, 1)
+    naive_ensemble_reference[i].α = naive_ensemble_reference[i].α * (upper_bounds[1] - lower_bounds[1]) + lower_bounds[1]
+    naive_ensemble_reference[i].δ = naive_ensemble_reference[i].δ * (upper_bounds[2] - lower_bounds[2]) + lower_bounds[2]
+  end
   @info "Saving the results"
 
   results = (
@@ -949,7 +980,7 @@ else
 
   #save the results
   serialize(result_folder * "/results.jld", results)
-  serialize(result_folder * "/trajectories_damped.jld", trajectories)
-  serialize(result_folder * "/variances_damped.jld", variances)
-  serialize(result_folder * "/cicps_damped.jld", total_cicps)
+  serialize(result_folder * "/trajectories_lv.jld", trajectories)
+  serialize(result_folder * "/variances_lv.jld", variances)
+  serialize(result_folder * "/cicps_lv.jld", total_cicps)
 end
