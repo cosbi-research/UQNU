@@ -1,7 +1,7 @@
 module out_of_domain_variability_nd
 
 include("ConfidenceEllipse.jl")
-using Distributions, .ConfidenceEllipse, Logging, Plots
+using Distributions, .ConfidenceEllipse, Logging, Plots, Random
 
 export out_of_domain_var, get_ensemble_predictions, getAverageVariance, getOutOfDomainAnalysisInSinglePoint, getOutOfDomainAnalysis, computeGroundTruth
 
@@ -19,7 +19,7 @@ end
 function computeGroundTruth(out_of_domain_grid)
     #create two matrixes with the same number of elements as x * y
     
-    out_of_domain_grid.ground_truth_y = [out_of_domain_grid.ground_truth_function(point)[1] for point in out_of_domain_grid.points]
+    out_of_domain_grid.ground_truth_y = [out_of_domain_grid.ground_truth_function(point) for point in out_of_domain_grid.points]
     
     @info "Ground truth vector field computed"
 
@@ -31,16 +31,14 @@ function computePoints(out_of_domain_grid)
         seed = 0
         tmp_rng = MersenneTwister(seed)
         
-        points = [rand(tmp_rng, dimension) for i in 1:out_of_domain_grid.num_points]
+        points = [rand(tmp_rng, out_of_domain_grid.dimension) for i in 1:out_of_domain_grid.num_points]
 
         for point in points 
             for d in 1:out_of_domain_grid.dimension
                 point[d] = out_of_domain_grid.ranges[d][1] + (out_of_domain_grid.ranges[d][2] - out_of_domain_grid.ranges[d][1]) * point[d]
             end
         end
-
-        points = hcat(points...)
-
+        
         out_of_domain_grid.points = points
         return 
 end    
@@ -135,6 +133,27 @@ function plotOutOfDomainAnalysis(out_of_domain_grid, out_of_domain_analysis)
     @info "Mean Ellipse Area: $(out_of_domain_analysis.mean_area)"
     
     return
+end
+
+function getDistance(first_point, second_point)
+    return sqrt(sum((first_point - second_point).^2))
+end
+
+#get the minimum distance between each out of domain point and the experimental points
+function getOutOfDomainDistance(out_of_domain_grid)
+    points = out_of_domain_grid.points
+    distances = []
+    for point in points
+        minDistance = Inf
+        for experimental_point in out_of_domain_grid.experimental_points
+            tmp = getDistance(point, experimental_point)
+            if tmp < minDistance
+                minDistance = tmp
+            end
+        end
+        push!(distances, minDistance)
+    end
+    return distances
 end
 
 end # module

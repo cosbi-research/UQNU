@@ -81,4 +81,6 @@ function ca_gound_truth(u)
     du[6] = -p[6]*u[6] + p[4]*u[2]*u[3] - p[5]*u[6]
     du[7] = -p[7]*u[7]*u[4] + p[8]*u[8] + p[9]*u[8]
     du[8] = p[7]*u[7]*u[4] - p[8]*u[8] - p[9]*u[8]
+
+    return du
 end

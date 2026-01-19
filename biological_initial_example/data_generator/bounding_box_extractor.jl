@@ -11,7 +11,7 @@ Random.seed!(rng, 10)
 training_dataset = deserialize("cell_apoptosis_silico_data.jld")
 
 #for each variable, find the min and the max over the dataset
-num_variables = size(training_dataset, 2) - 2 #exclude time and traj columns
+num_variables = size(training_dataset, 2) - 1 #exclude time and traj columns
 min_values = zeros(num_variables)
 max_values = zeros(num_variables)
 for i in 1:num_variables
@@ -24,6 +24,16 @@ bounding_box = DataFrame(variable = String[], min_value = Float64[], max_value =
 for i in 1:num_variables
     push!(bounding_box, (string("u", i), min_values[i], max_values[i]))
 end
+
+#extend the bounding box by 50% on each side
+for i in 1:num_variables
+    range = max_values[i] - min_values[i]
+    min_values[i] -= 0.5 * range
+    max_values[i] += 0.5 * range
+    bounding_box[i, :min_value] = min_values[i]
+    bounding_box[i, :max_value] = max_values[i]
+end
+
 
 #save the bounding box
 serialize("cell_apoptosis_silico_data_bounding_box.jld", bounding_box)

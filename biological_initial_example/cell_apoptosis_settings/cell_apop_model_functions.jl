@@ -14,6 +14,7 @@ function ground_truth_function(du, u, p, t)
     du[8] = p[7]*u[7]*u[4] - p[8]*u[8] - p[9]*u[8]
 end
 
+
 """
     ground_truth_function(du, u, p, t)
 

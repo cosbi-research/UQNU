@@ -59,6 +59,9 @@ bounding_box_df = deserialize("../data_generator/cell_apoptosis_silico_data_boun
 #load the result of the single-parameter training
 trained_ensemble = deserialize("./training_UDE_results/ensemble_results.jld")
 #sort them according to status and validation likelihood
+#get only the non-failed ones 
+trained_ensemble = filter(res -> res.status == "success", trained_ensemble)
+
 trained_ensemble = [res for res in trained_ensemble]
 single_parameter_training = trained_ensemble[starting_point_index]
 
@@ -67,7 +70,6 @@ upper_bounds = single_parameter_training.upper_parameter_boundaries
 
 parameters = deepcopy(single_parameter_training.training_res.p)
 original_parameters_ude = parameters.ode_par .* (upper_bounds .- lower_bounds) .+ lower_bounds
-o
 parameters .= 1.0
 
 
@@ -100,13 +102,16 @@ for j in 1:size(df, 1)
   experimental_points = push!(experimental_points, collect(df[j, 2:end]))
 end
 
-ood_analyzer = out_of_domain_variability_nd.out_of_domain_var_nd(xrange_bounding_box, yrange_bounding_box, vector_field_function, lotka_volterra_gound_truth, experimental_points, [], [], [])
-out_of_domain_variability_nd.computeGroundTruth(ood_analyzer)
+ranges = [(bounding_box_df[i, 2], bounding_box_df[i, 3]) for i in 1:size(bounding_box_df, 1)]
+
+ood_analyzer = out_of_domain_variability_nd.out_of_domain_var_nd(ranges, 100, vector_field_function, ca_gound_truth, experimental_points, [], [], 8)
 out_of_domain_variability_nd.computePoints(ood_analyzer)
+out_of_domain_variability_nd.computeGroundTruth(ood_analyzer)
+
 out_of_domain_points = ood_analyzer.points
 
 #get the distance between the training domain and the out of domain points
-distances_from_training_set = out_of_domain_variability.getOutOfDomainDistance(ood_analyzer)
+distances_from_training_set = out_of_domain_variability_nd.getOutOfDomainDistance(ood_analyzer)
 
 function model_simulation(θ, t, trajectory, initial_states, integrator=integrator, sensealg=sensealg, prob_uode_pred=prob_uode_pred)
   if trajectory == 1
@@ -163,7 +168,7 @@ function model_simulation(θ, t, trajectory, initial_states, integrator=integrat
   return Array(trajectory_sol)
 end
 
-times = training_data_structure.solution_dataframes[1].t
+times = training_data_df.t
 original_times = deepcopy(times)
 times = times[1:1:end]
 
