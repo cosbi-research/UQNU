@@ -50,17 +50,14 @@ using .diagnostic_training_set
 include("configurations_ca.jl")
 
 ################################### loads the data ##############################################
-training_data_structure = deserialize("./data_generator/lotka_volterra_training_data_structure_err_1.jld")
+training_data_df = deserialize("../data_generator/cell_apoptosis_silico_data.jld")
 
 
-bounding_box = deserialize("./data_generator/lotka_volterra_in_silico_data_bounding_box.jld")
-#generate a grid 100*100
-xrange_bounding_box = range(bounding_box[1], bounding_box[2], length=10)
-yrange_bounding_box = range(bounding_box[3], bounding_box[4], length=10)
+bounding_box_df = deserialize("../data_generator/cell_apoptosis_silico_data_bounding_box.jld")
 
 ################################### loads the single-result #####################################
 #load the result of the single-parameter training
-trained_ensemble = deserialize("training_UDE_results/lv/ensemble_results_model_1_with_seed.jld")
+trained_ensemble = deserialize("./training_UDE_results/ensemble_results.jld")
 #sort them according to status and validation likelihood
 trained_ensemble = [res for res in trained_ensemble]
 single_parameter_training = trained_ensemble[starting_point_index]
@@ -69,19 +66,16 @@ lower_bounds = single_parameter_training.lower_parameter_boundaries
 upper_bounds = single_parameter_training.upper_parameter_boundaries
 
 parameters = deepcopy(single_parameter_training.training_res.p)
-original_α = parameters.α * (upper_bounds[1] - lower_bounds[1]) + lower_bounds[1]
-original_δ = parameters.δ * (upper_bounds[2] - lower_bounds[2]) + lower_bounds[2]
+original_parameters_ude = parameters.ode_par .* (upper_bounds .- lower_bounds) .+ lower_bounds
+o
+parameters .= 1.0
 
-parameters.α = 1.0
-parameters.δ = 1.0
-
-original_parameters_ude = [original_α, original_δ]
 
 naive_ensemble_reference = [res.training_res.p for res in trained_ensemble[ensemble_interval_begin:ensemble_interval_end]]
 
 ################################### separate in the required structure ##########################
 p_net, st = Lux.setup(rng, approximating_neural_network)
-tspan = extrema(training_data_structure.solution_dataframes[1].t)
+tspan = extrema(training_data_df.t)
 
 lower_bounds = single_parameter_training.lower_parameter_boundaries
 upper_bounds = single_parameter_training.upper_parameter_boundaries
@@ -89,7 +83,9 @@ upper_bounds = single_parameter_training.upper_parameter_boundaries
 uode_derivative_function = get_uode_model_function(approximating_neural_network, st, original_parameters_ude)
 vector_field_function = get_vector_field_function(approximating_neural_network, st, original_parameters_ude)
 
-prob_uode_pred = ODEProblem{true}(uode_derivative_function, Array(training_data_structure.solution_dataframes[1][1, 2:(end-1)]), tspan)
+prob_uode_pred = ODEProblem{true}(uode_derivative_function, Array(training_data_df[1, 2:end]), tspan)
+
+################### DUBBIO SU COSA SIA ###########################
 initial_states = deepcopy(single_parameter_training.training_res.u0)
 
 ################################### instantiate the module for the analysis OOD #################
