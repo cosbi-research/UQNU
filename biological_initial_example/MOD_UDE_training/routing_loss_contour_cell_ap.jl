@@ -2,7 +2,7 @@ cd(@__DIR__)
 
 using ComponentArrays, Lux, SciMLSensitivity, Serialization, OrdinaryDiffEq, LinearAlgebra, Random, DataFrames, CSV, Plots, Statistics
 using Optimization, OptimizationOptimisers, OptimizationOptimJL, StableRNGs
-using DiffEqFlux, Flux, Zygote, StatsPlots, LaTeXStrings, Gadfly, ColorSchemes, Dates, Distributions
+using Zygote, StatsPlots, LaTeXStrings, Gadfly, ColorSchemes, Dates, Distributions
 using Logging, StatsBase
 
 loglevel = Logging.Info
@@ -89,23 +89,20 @@ prob_uode_pred = ODEProblem{true}(uode_derivative_function, Array(training_data_
 initial_states = deepcopy(single_parameter_training.training_res.u0)
 
 ################################### instantiate the module for the analysis OOD #################
-include("out_of_domain_variability.jl")
-using .out_of_domain_variability
+include("out_of_domain_variability_nd.jl")
+using .out_of_domain_variability_nd
 
 #get experimental points]
 experimental_points = []
-for i in 1:3
-  df = training_data_structure.solution_dataframes[i]
-  for j in 1:size(df, 1)
-    global experimental_points
-    experimental_points = push!(experimental_points, collect(df[j, 2:(end-1)]))
-  end
+df = training_data_df
+for j in 1:size(df, 1)
+  global experimental_points
+  experimental_points = push!(experimental_points, collect(df[j, 2:end]))
 end
 
-ood_analyzer = out_of_domain_variability.out_of_domain_var(xrange_bounding_box, yrange_bounding_box, vector_field_function, lotka_volterra_gound_truth, experimental_points, [], [], [])
-out_of_domain_variability.computeGroundTruth(ood_analyzer)
-out_of_domain_variability.computePoints(ood_analyzer)
-
+ood_analyzer = out_of_domain_variability_nd.out_of_domain_var_nd(xrange_bounding_box, yrange_bounding_box, vector_field_function, lotka_volterra_gound_truth, experimental_points, [], [], [])
+out_of_domain_variability_nd.computeGroundTruth(ood_analyzer)
+out_of_domain_variability_nd.computePoints(ood_analyzer)
 out_of_domain_points = ood_analyzer.points
 
 #get the distance between the training domain and the out of domain points

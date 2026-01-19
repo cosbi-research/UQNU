@@ -1,4 +1,4 @@
-module out_of_domain_variability_3d
+module out_of_domain_variability_nd
 
 include("ConfidenceEllipse.jl")
 using Distributions, .ConfidenceEllipse, Logging, Plots
@@ -11,7 +11,7 @@ mutable struct out_of_domain_var_nd
     vector_field_function::Function
     ground_truth_function::Function
     experimental_points::Array{Array{Float64}}
-    ground_truth_y::Array{ArrayFloat64}
+    ground_truth_y::Array{Array{Float64}}
     points::Array{Array{Float64}}
     dimension::Int
 end
@@ -135,5 +135,6 @@ function plotOutOfDomainAnalysis(out_of_domain_grid, out_of_domain_analysis)
     @info "Mean Ellipse Area: $(out_of_domain_analysis.mean_area)"
     
     return
+end
 
 end # module
