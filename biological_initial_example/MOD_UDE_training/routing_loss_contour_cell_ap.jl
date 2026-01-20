@@ -12,6 +12,8 @@ result_folder = "result_ca"
 
 maxiters = 1000
 
+observables = [4,]
+
 #parse the starting point index 
 starting_point_index = 1
 #TODO ripristinare
@@ -258,7 +260,7 @@ function costFunctionOnSingleTraj(par, i)
   end
   simulation = simulation[:, 1:end]
 
-  cost_trajectory = 1 / size(original_solutions, 1) * (sum([sum(simulation[j, :] .- original_solutions[!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[j]^2 for j in 2:(size(original_solutions, 2))]))
+  cost_trajectory = 1 / size(original_solutions, 1) * (sum([sum(simulation[j, :] .- original_solutions[!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[j]^2 for j in observables]))
 
   return cost_trajectory
 end
@@ -274,7 +276,7 @@ function costFunctionOnSingleTraj(par, i, integrator, sensealg, prob_uode_tmp)
 
   simulation = simulation[:, 1:end]
 
-  cost_trajectory = 1 / size(original_solutions, 1) * (sum([sum(simulation[j, :] .- original_solutions[!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[j]^2 for j in 2:(size(original_solutions, 2))]))
+  cost_trajectory = 1 / size(original_solutions, 1) * (sum([sum(simulation[j, :] .- original_solutions[!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[j]^2 for j in observables]))
 
   return cost_trajectory
 end
@@ -519,13 +521,22 @@ function getValidationCost(pars, initial_states)
     tmp_times = training_data_structure.solution_dataframes[i].t
     simulation = model_simulation(pars, tmp_times, i, initial_states)
 
+    #temp print the simulation against the solution dataframe 
+    #= plt = Plots.plot(tmp_times, simulation', label=["Sim 1" "Sim 2" "Sim 3" "Sim 4" "Sim 5" "Sim 6" "Sim 7" "Sim 8"], title="Simulation vs Solution Traj " * string(i))
+    #plot the solution dataframe 
+    for j in 1:(size(training_data_structure.solution_dataframes[i], 2)-1)
+      Plots.scatter!(plt, training_data_structure.solution_dataframes[i].t, training_data_structure.solution_dataframes[i][!, j+1], label="Data " * string(j))
+    end =#
+
+    display(plt)
+
     if simulation == Inf
       return Inf
     end
 
     #simulation = simulation[:, 2:end]
     #cost_trajectory = 1 / size(training_data_structure.validation_dataframes[i], 1) * (sum((simulation[1, :] - training_data_structure.validation_dataframes[i].x1) .^ 2 ./ training_data_structure.max_oscillations[i][1]^2) + sum((simulation[2, :] - training_data_structure.validation_dataframes[i].x2) .^ 2 ./ training_data_structure.max_oscillations[i][2]^2))
-    cost += 1 / size(training_data_structure.solution_dataframes[i], 1) * (sum([sum(simulation[j, :] .- training_data_structure.solution_dataframes[i][!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[j]^2 for j in 1:(size(training_data_structure.solution_dataframes[i], 2)-1)]))
+    cost += 1 / size(training_data_structure.solution_dataframes[i], 1) * (sum([sum(simulation[j, :] .- training_data_structure.solution_dataframes[i][!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[j]^2 for j in observables]))
   end
   return cost
 end
