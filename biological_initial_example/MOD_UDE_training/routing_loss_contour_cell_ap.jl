@@ -70,8 +70,7 @@ upper_bounds = single_parameter_training.upper_parameter_boundaries
 
 parameters = deepcopy(single_parameter_training.training_res.p)
 original_parameters_ude = parameters.ode_par .* (upper_bounds .- lower_bounds) .+ lower_bounds
-parameters .= 1.0
-
+parameters.ode_par .= 1.0
 
 naive_ensemble_reference = [res.training_res.p for res in trained_ensemble[ensemble_interval_begin:ensemble_interval_end]]
 
@@ -180,7 +179,7 @@ function get_Hessian(parameters_to_consider, times, initial_states, training_dat
 
   sensitivity_matrix = vcat(sensitivity_matrix_first_trajectory,)
 
-  multiplicative_factor_array = repeat(training_data_structure.max_oscillations[1], outer=size(times, 1))
+  multiplicative_factor_array = repeat(training_data_structure.max_oscillations, outer=size(times, 1))
 
   multiplicative_factor_matrix = Diagonal(multiplicative_factor_array)
 
@@ -196,7 +195,7 @@ function get_Hessian_not_proportional(parameters_to_consider, times, initial_sta
 
   sensitivity_matrix = vcat(sensitivity_matrix_first_trajectory,)
 
-  multiplicative_factor_array = repeat(training_data_structure.max_oscillations[1], outer=size(times, 1))
+  multiplicative_factor_array = repeat(training_data_structure.max_oscillations, outer=size(times, 1))
 
   multiplicative_factor_matrix = Diagonal(multiplicative_factor_array)
 
@@ -259,7 +258,7 @@ function costFunctionOnSingleTraj(par, i)
   end
   simulation = simulation[:, 1:end]
 
-  cost_trajectory = 1 / size(original_solutions, 1) * (sum([sum(simulation[j, :] .- original_solutions[!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[i][j]^2 for j in 2:(size(original_solutions, 2))]))
+  cost_trajectory = 1 / size(original_solutions, 1) * (sum([sum(simulation[j, :] .- original_solutions[!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[j]^2 for j in 2:(size(original_solutions, 2))]))
 
   return cost_trajectory
 end
@@ -275,7 +274,7 @@ function costFunctionOnSingleTraj(par, i, integrator, sensealg, prob_uode_tmp)
 
   simulation = simulation[:, 1:end]
 
-  cost_trajectory = 1 / size(original_solutions, 1) * (sum([sum(simulation[j, :] .- original_solutions[!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[i][j]^2 for j in 2:(size(original_solutions, 2))]))
+  cost_trajectory = 1 / size(original_solutions, 1) * (sum([sum(simulation[j, :] .- original_solutions[!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[j]^2 for j in 2:(size(original_solutions, 2))]))
 
   return cost_trajectory
 end
@@ -424,8 +423,8 @@ function getCovarianceGradient_n(par, points, total_ensemble, ood_analyzer)
   for j in 1:Npts
     # covariance Σ at point j
     Σ = zeros(eltype(Y), n, n)
-    @inbounds for i in 1:M
-      δ = @view Y[:, j, i] .- μ[:, j]
+    for i in 1:M
+      δ = Y[:, j, i] .- μ[:, j]
       Σ .+= (δ * δ') / M
     end
 
@@ -438,12 +437,12 @@ function getCovarianceGradient_n(par, points, total_ensemble, ood_analyzer)
     # factorization to compute Σ^{-1} * dΣ stably (avoid explicit inv)
     F = cholesky(Σ; check=false)
 
-    δcur = @view current_pred[:, j] .- μ[:, j]  # (n,)
+    δcur = current_pred[:, j] .- μ[:, j]  # (n,)
 
     # for each parameter k, build dΣ_k and use:
     # d(detΣ)/dθ_k = detΣ * tr(Σ^{-1} dΣ_k)
-    @inbounds for k in 1:P
-      gk = @view G[:, j, k]  # (n,)
+    for k in 1:P
+      gk =  G[:, j, k]  # (n,)
 
       # dΣ_k ≈ α * (gk*δcur' + δcur*gk')  (your 2D cross-term generalization)
       dΣ = α .* (gk * δcur' .+ δcur * gk')
@@ -526,7 +525,7 @@ function getValidationCost(pars, initial_states)
 
     #simulation = simulation[:, 2:end]
     #cost_trajectory = 1 / size(training_data_structure.validation_dataframes[i], 1) * (sum((simulation[1, :] - training_data_structure.validation_dataframes[i].x1) .^ 2 ./ training_data_structure.max_oscillations[i][1]^2) + sum((simulation[2, :] - training_data_structure.validation_dataframes[i].x2) .^ 2 ./ training_data_structure.max_oscillations[i][2]^2))
-    cost_trajectory = 1 / size(training_data_structure.solution_dataframes[i], 1) * (sum([sum(simulation[j, :] .- training_data_structure.validation_dataframes[i][!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[i][j]^2 for j in 1:(size(training_data_structure.validation_dataframes[i], 2)-1)]))
+    cost += 1 / size(training_data_structure.solution_dataframes[i], 1) * (sum([sum(simulation[j, :] .- training_data_structure.solution_dataframes[i][!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[j]^2 for j in 1:(size(training_data_structure.solution_dataframes[i], 2)-1)]))
   end
   return cost
 end
@@ -554,10 +553,12 @@ selected_points = out_of_domain_points
 #selected_points = selected_points[:, 1:10]
 
 #each trajectory moves along a specific subspace
-total_parameter_indexes = 1:(length(parameters)-2)
+total_parameter_indexes = 1:(length(parameters)-length(parameters.ode_par))
 sampled_indexes_trajectories = [sort(sample(total_parameter_indexes, 200; replace=false)) for i in 1:number_of_trajectories]
 #put always the last two indexes
-sampled_indexes_trajectories = [vcat(sampled_indexes_trajectories[i], length(parameters) - 1, length(parameters)) for i in 1:number_of_trajectories]
+
+sampled_indexes_trajectories = [vcat(sampled_indexes_trajectories[i], collect(length(parameters)-length(parameters.ode_par):length(parameters))) for i in 1:number_of_trajectories]
+
 
 #check the validation cost before, if it's more than the threshold exit immediately
 
