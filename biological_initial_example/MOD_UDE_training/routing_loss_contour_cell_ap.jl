@@ -50,7 +50,7 @@ using .diagnostic_training_set
 include("configurations_ca.jl")
 
 ################################### loads the data ##############################################
-training_data_df = deserialize("../data_generator/cell_apoptosis_silico_data.jld")
+training_data_structure = deserialize("../data_generator/cell_apoptosis_training_data_structure.jld")
 
 
 bounding_box_df = deserialize("../data_generator/cell_apoptosis_silico_data_bounding_box.jld")
@@ -77,7 +77,7 @@ naive_ensemble_reference = [res.training_res.p for res in trained_ensemble[ensem
 
 ################################### separate in the required structure ##########################
 p_net, st = Lux.setup(rng, approximating_neural_network)
-tspan = extrema(training_data_df.t)
+tspan = extrema(training_data_structure.solution_dataframes[1].t)
 
 lower_bounds = single_parameter_training.lower_parameter_boundaries
 upper_bounds = single_parameter_training.upper_parameter_boundaries
@@ -85,7 +85,7 @@ upper_bounds = single_parameter_training.upper_parameter_boundaries
 uode_derivative_function = get_uode_model_function(approximating_neural_network, st, original_parameters_ude)
 vector_field_function = get_vector_field_function(approximating_neural_network, st, original_parameters_ude)
 
-prob_uode_pred = ODEProblem{true}(uode_derivative_function, Array(training_data_df[1, 2:end]), tspan)
+prob_uode_pred = ODEProblem{true}(uode_derivative_function, Array(training_data_structure.solution_dataframes[1][1, 2:end]), tspan)
 
 ################### DUBBIO SU COSA SIA ###########################
 initial_states = deepcopy(single_parameter_training.training_res.u0)
@@ -96,7 +96,7 @@ using .out_of_domain_variability_nd
 
 #get experimental points]
 experimental_points = []
-df = training_data_df
+df = training_data_structure.solution_dataframes[1]
 for j in 1:size(df, 1)
   global experimental_points
   experimental_points = push!(experimental_points, collect(df[j, 2:end]))
@@ -168,7 +168,7 @@ function model_simulation(θ, t, trajectory, initial_states, integrator=integrat
   return Array(trajectory_sol)
 end
 
-times = training_data_df.t
+times = training_data_structure.solution_dataframes[1].t
 original_times = deepcopy(times)
 times = times[1:1:end]
 
@@ -177,16 +177,10 @@ function get_Hessian(parameters_to_consider, times, initial_states, training_dat
 
   #first trajectory
   sensitivity_matrix_first_trajectory = Zygote.jacobian(p -> model_simulation(p, times, 1, initial_states), parameters_to_consider)[1] .* parameters_to_consider'
-  #second trajectory
-  sensitivity_matrix_second_trajectory = Zygote.jacobian(p -> model_simulation(p, times, 2, initial_states), parameters_to_consider)[1] .* parameters_to_consider'
-  #third trajectory
-  sensitivity_matrix_third_trajectory = Zygote.jacobian(p -> model_simulation(p, times, 3, initial_states), parameters_to_consider)[1] .* parameters_to_consider'
 
-  sensitivity_matrix = vcat(sensitivity_matrix_first_trajectory, sensitivity_matrix_second_trajectory, sensitivity_matrix_third_trajectory)
+  sensitivity_matrix = vcat(sensitivity_matrix_first_trajectory,)
 
   multiplicative_factor_array = repeat(training_data_structure.max_oscillations[1], outer=size(times, 1))
-  multiplicative_factor_array = vcat(multiplicative_factor_array, repeat(training_data_structure.max_oscillations[2], outer=size(times)))
-  multiplicative_factor_array = vcat(multiplicative_factor_array, repeat(training_data_structure.max_oscillations[3], outer=size(times)))
 
   multiplicative_factor_matrix = Diagonal(multiplicative_factor_array)
 
@@ -199,16 +193,10 @@ function get_Hessian_not_proportional(parameters_to_consider, times, initial_sta
 
   #first trajectory
   sensitivity_matrix_first_trajectory = Zygote.jacobian(p -> model_simulation(p, times, 1, initial_states), parameters_to_consider)[1]
-  #second trajectory
-  sensitivity_matrix_second_trajectory = Zygote.jacobian(p -> model_simulation(p, times, 2, initial_states), parameters_to_consider)[1]
-  #third trajectory
-  sensitivity_matrix_third_trajectory = Zygote.jacobian(p -> model_simulation(p, times, 3, initial_states), parameters_to_consider)[1]
 
-  sensitivity_matrix = vcat(sensitivity_matrix_first_trajectory, sensitivity_matrix_second_trajectory, sensitivity_matrix_third_trajectory)
+  sensitivity_matrix = vcat(sensitivity_matrix_first_trajectory,)
 
   multiplicative_factor_array = repeat(training_data_structure.max_oscillations[1], outer=size(times, 1))
-  multiplicative_factor_array = vcat(multiplicative_factor_array, repeat(training_data_structure.max_oscillations[2], outer=size(times)))
-  multiplicative_factor_array = vcat(multiplicative_factor_array, repeat(training_data_structure.max_oscillations[3], outer=size(times)))
 
   multiplicative_factor_matrix = Diagonal(multiplicative_factor_array)
 
@@ -270,7 +258,8 @@ function costFunctionOnSingleTraj(par, i)
     return Inf
   end
   simulation = simulation[:, 1:end]
-  cost_trajectory = 1 / size(original_solutions, 1) * (sum((simulation[1, :] - original_solutions.x1) .^ 2 ./ training_data_structure.max_oscillations[i][1]^2) + sum((simulation[2, :] - original_solutions.x2) .^ 2 ./ training_data_structure.max_oscillations[i][2]^2))
+
+  cost_trajectory = 1 / size(original_solutions, 1) * (sum([sum(simulation[j, :] .- original_solutions[!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[i][j]^2 for j in 2:(size(original_solutions, 2))]))
 
   return cost_trajectory
 end
@@ -286,16 +275,13 @@ function costFunctionOnSingleTraj(par, i, integrator, sensealg, prob_uode_tmp)
 
   simulation = simulation[:, 1:end]
 
-  cost_trajectory = 1 / size(original_solutions, 1) * (sum((simulation[1, :] - original_solutions.x1) .^ 2 ./ training_data_structure.max_oscillations[i][1]^2) + sum((simulation[2, :] - original_solutions.x2) .^ 2 ./ training_data_structure.max_oscillations[i][2]^2))
+  cost_trajectory = 1 / size(original_solutions, 1) * (sum([sum(simulation[j, :] .- original_solutions[!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[i][j]^2 for j in 2:(size(original_solutions, 2))]))
 
   return cost_trajectory
 end
 
 function costFunction(par, integrator, sensealg, prob_uode_tmp)
-  cost = 0.0
-  for i in 1:3
-    cost += costFunctionOnSingleTraj(par, i, integrator, sensealg, prob_uode_tmp)
-  end
+  cost = costFunctionOnSingleTraj(par, 1, integrator, sensealg, prob_uode_tmp)
   return cost
 end
 
@@ -305,10 +291,10 @@ function getReoptimizedParameters(par, integrator, sensealg)
 
   adtype = Optimization.AutoZygote()
 
-  original_parameters_ude_fixed = [original_parameters_ude[1] * par.α, original_parameters_ude[2] * par.δ] 
+  original_parameters_ude_fixed = original_parameters_ude .* par.ode_par
 
   uode_derivative_function_fixed = get_uode_fixed_model_function(approximating_neural_network, st, original_parameters_ude_fixed)
-  prob_uode_pred_fixed = ODEProblem{true}(uode_derivative_function_fixed, Array(training_data_structure.solution_dataframes[1][1, 2:(end-1)]), tspan)
+  prob_uode_pred_fixed = ODEProblem{true}(uode_derivative_function_fixed, Array(training_data_structure.solution_dataframes[1][1, 2:end]), tspan)
 
   optf = Optimization.OptimizationFunction((x, p) -> costFunction(x, integrator, sensealg, prob_uode_pred_fixed), adtype)
   optprob = Optimization.OptimizationProblem(optf, par)
@@ -351,6 +337,7 @@ function getReoptimizedParameters(par, integrator, sensealg)
   return solution
 end
 
+#################################################### arrivato qui #########################################################
 function flatten(min_x_square, min_y_square, max_x_square, max_y_square, rows, cols)
   flattened_positions = []
   for x in min_x_square:max_x_square
@@ -365,15 +352,7 @@ end
 
 function getVarianceGradient(par, points, total_ensemble, ood_analyzer)
 
-  selected_x_index = sample(1:10, 1)[1]
-  selected_y_index = sample(1:10, 1)[1]
-
-  min_x_square = max(selected_x_index - 2, 1)
-  min_y_square = max(selected_y_index - 2, 1)
-  max_x_square = min(selected_x_index + 2, 10)
-  max_y_square = min(selected_y_index + 2, 10)
-  selected_indexes = flatten(min_x_square, min_y_square, max_x_square, max_y_square, 10, 10)
-
+  selected_indexes = sample(1:length(points), 25, replace=false)
   selected_tmp_points = points[:, selected_indexes]
 
   ensemble_predictions = out_of_domain_variability.get_ensemble_predictions(ood_analyzer, total_ensemble, selected_tmp_points)
@@ -390,123 +369,102 @@ function getVarianceGradient(par, points, total_ensemble, ood_analyzer)
 
   #@infiltrate
 
-  #rows: gradient of the vector field (first variable) in a point
-  gradient_in_single_points_y1 = 2 / size(total_ensemble, 1) .* (current_prediction[1, :] .- mean_prediction[1, :]) .* gradient_vector_field
+  #rows: gradient of the vector field in a point
+  gradient_in_single_points = [2 / size(total_ensemble, k) .* (current_prediction[k, :] .- mean_prediction[k, :]) .* gradient_vector_field for k in 1:size(current_prediction, 1)]
 
-  variance_y1 = zeros(size(current_prediction[1, :]))
-  for i in axes(stacked_predictions, 3)
-    #@infiltrate
-    variance_y1 .+= 1 / size(total_ensemble, 1) .* abs2.(stacked_predictions[1, :, i] .- mean_prediction[1, :])
+  ########################### ARRIVATO QUI ####################################
+  variances = repeat(zeros(size(current_prediction[1, :])), size(current_prediction, 1))
+  for k in 1:size(current_prediction, 1)
+    variances[k] = zeros(size(current_prediction[1, :]))
+    for i in axes(stacked_predictions, 3)
+      variances[k] .+= 1 / size(total_ensemble, 1) .* abs2.(stacked_predictions[k, :, i] .- mean_prediction[k, :])
+    end
   end
-  gradient_in_single_points_y1 = gradient_in_single_points_y1 ./ variance_y1
 
-  #Second variable of the ensemble
-  vector_field = x -> vector_field_function(selected_tmp_points, x)[2, :]
-  gradient_vector_field = jacobian(x -> vector_field(x), par)[1]
+  gradient_in_single_points_y = [gradient_in_single_points[k] ./ variances[k] for k in 1:size(current_prediction, 1)]
 
-  #rows: gradient of the vector field (second variable) in a point
-  gradient_in_single_points_y2 = 2 / size(total_ensemble, 1) .* (current_prediction[2, :] .- mean_prediction[2, :]) .* gradient_vector_field
-  variance_y2 = zeros(size(current_prediction[2, :]))
-  for i in axes(stacked_predictions, 3)
-    variance_y2 .+= 1 / size(total_ensemble, 1) .* abs2.(stacked_predictions[2, :, i] .- mean_prediction[2, :])
-  end
-  gradient_in_single_points_y2 = gradient_in_single_points_y2 ./ variance_y2
-
-
-  #generate a mask to put to zero half of the point sampled_indexes 
-  #generate 50 numbers between 1 and 100
-  #selected_indexes = sort(sample(1:100, 20, replace=false))
-
-  gradient_variance = mean(gradient_in_single_points_y1, dims=1) .+ mean(gradient_in_single_points_y2, dims=1)
+  gradient_variance = reduce(+, [mean(gradient_in_single_points_y[k], dims=1) for k in 1:size(current_prediction, 1)])
 
   return gradient_variance
 end
 
-function getCovarianceGradient(par, points, total_ensemble, ood_analyzer)
+function getCovarianceGradient_n(par, points, total_ensemble, ood_analyzer)
 
-  selected_x_index = sample(1:10, 1)[1]
-  selected_y_index = sample(1:10, 1)[1]
-
-  min_x_square = max(selected_x_index - 2, 1)
-  min_y_square = max(selected_y_index - 2, 1)
-  max_x_square = min(selected_x_index + 2, 10)
-  max_y_square = min(selected_y_index + 2, 10)
-  selected_indexes = flatten(min_x_square, min_y_square, max_x_square, max_y_square, 10, 10)
-
+  selected_indexes = sample(1:length(points), 25, replace=false)
   selected_tmp_points = points[:, selected_indexes]
 
   ensemble_predictions = out_of_domain_variability.get_ensemble_predictions(ood_analyzer, total_ensemble, selected_tmp_points)
   current_prediction = out_of_domain_variability.get_ensemble_predictions(ood_analyzer, [par], selected_tmp_points)[1]
+  # (n × Npts)
 
-  #get the mean of the prediction at each point
-  stacked_predictions = cat(ensemble_predictions..., dims=3)
-  mean_prediction = mean(stacked_predictions, dims=3)
-  mean_prediction = mean_prediction[:, :, 1]
+  # stack ensemble -> Y: (n × Npts × M)
+  Y = cat(ensemble_preds...; dims=3)
+  n, _, M = size(Y)
 
-  #First variable of the ensemble
-  vector_field = x -> vector_field_function(selected_tmp_points, x)[1, :]
-  gradient_vector_field_y1 = jacobian(x -> vector_field(x), par)[1]
+  # mean across ensemble: μ (n × Npts)
+  μ = dropdims(mean(Y; dims=3); dims=3)
 
-  #rows: gradient of the vector field (first variable) in a point
-  gradient_in_single_points_variance_y1 = 2 * (size(total_ensemble, 1)-1) / size(total_ensemble, 1)^2 .* (current_prediction[1, :] .- mean_prediction[1, :]) .* gradient_vector_field_y1
-  variance_y1 = zeros(size(current_prediction[1, :]))
-  for i in axes(stacked_predictions, 3)
-    #@infiltrate
-    variance_y1 .+= 1 / size(total_ensemble, 1) .* abs2.(stacked_predictions[1, :, i] .- mean_prediction[1, :])
+  # Jacobian of current prediction wrt parameters:
+  # pred_flat(par) = vec(current_pred) of length n*Npts
+  function pred_flat(pv)
+    pred = out_of_domain_variability.get_ensemble_predictions(
+      ood_analyzer, [pv], pts
+    )[1]
+    return vec(pred)
   end
-  
-  #Second variable of the ensemble[]
-  vector_field = x -> vector_field_function(selected_tmp_points, x)[2, :]
-  gradient_vector_field_y2 = jacobian(x -> vector_field(x), par)[1]
+  J = ForwardDiff.jacobian(pred_flat, par_vec)          # (n*Npts) × P
+  G = reshape(J, n, Npts, P)                            # n × Npts × P
 
-  gradient_in_single_points_variance_y1 = gradient_in_single_points_variance_y1 
+  α = (M - 1) / (M^2)   # matches your scaling
 
+  # total_gradient: rows = points, cols = parameters
+  total_gradient = zeros(eltype(J), Npts, P)
+  determinant = zeros(eltype(Y), Npts)
 
-  #rows: gradient of the vector field (second variable) in a point
-  gradient_in_single_points_variance_y2 =  2 * (size(total_ensemble, 1)-1) / size(total_ensemble, 1)^2 .* (current_prediction[2, :] .- mean_prediction[2, :]) .* gradient_vector_field_y2
-  variance_y2 = zeros(size(current_prediction[2, :]))
-  for i in axes(stacked_predictions, 3)
-    variance_y2 .+= 1 / size(total_ensemble, 1) .* abs2.(stacked_predictions[2, :, i] .- mean_prediction[2, :])
+  for j in 1:Npts
+    # covariance Σ at point j
+    Σ = zeros(eltype(Y), n, n)
+    @inbounds for i in 1:M
+      δ = @view Y[:, j, i] .- μ[:, j]
+      Σ .+= (δ * δ') / M
+    end
+
+    # regularize like a PSD covariance (helps avoid negative det from numerics)
+    Σ = Symmetric(Σ + ϵ * I)
+
+    detΣ = det(Matrix(Σ))
+    determinant[j] = detΣ
+
+    # factorization to compute Σ^{-1} * dΣ stably (avoid explicit inv)
+    F = cholesky(Σ; check=false)
+
+    δcur = @view current_pred[:, j] .- μ[:, j]  # (n,)
+
+    # for each parameter k, build dΣ_k and use:
+    # d(detΣ)/dθ_k = detΣ * tr(Σ^{-1} dΣ_k)
+    @inbounds for k in 1:P
+      gk = @view G[:, j, k]  # (n,)
+
+      # dΣ_k ≈ α * (gk*δcur' + δcur*gk')  (your 2D cross-term generalization)
+      dΣ = α .* (gk * δcur' .+ δcur * gk')
+
+      X = F \ (F' \ dΣ)  # X = Σ^{-1} dΣ
+      total_gradient[j, k] = detΣ * tr(X)
+    end
   end
-
-  gradient_in_single_points_variance_y2 = gradient_in_single_points_variance_y2 
-
-  covariance_y1_y2 = zeros(size(current_prediction[1, :]))
-  for i in axes(stacked_predictions, 3)
-    covariance_y1_y2 .+= 1 / size(total_ensemble, 1) .* (stacked_predictions[1, :, i] .- mean_prediction[1, :]) .* (stacked_predictions[2, :, i] .- mean_prediction[2, :])
-  end
-
-
-  gradient_cov_y1_y2 = (size(total_ensemble, 1)-1) / size(total_ensemble, 1)^2 .* (gradient_vector_field_y1 .* (current_prediction[2, :] .- mean_prediction[2, :]) .+ gradient_vector_field_y2 .* (current_prediction[1, :] .- mean_prediction[1, :])) 
-   
-  gradient_var = gradient_in_single_points_variance_y1 .* variance_y2 .+ gradient_in_single_points_variance_y2 .* variance_y1 
-  gradient_cov_negative_term = - 2 * gradient_cov_y1_y2 .* covariance_y1_y2
-
-  total_gradient = gradient_var .+ gradient_cov_negative_term
-
-  determinant = variance_y1 .* variance_y2 .- covariance_y1_y2 .^ 2
-
-  #@infiltrate
 
   @info "Volumes of ellipsoids " * string(determinant)
-
-  total_gradient = total_gradient .* sign.(determinant)
-
-  #total_gradient = total_gradient ./ (variance_y1 .* variance_y2 .* variance_y3)
-  #@infiltrate
-  #total_gradient = total_gradient ./ abs.(determinant)
-
   @info "Mean volumes of ellipsoids " * string(mean(abs.(determinant)))
 
-  #total_grandient = total_gradient ./ abs.(determinant)
+  # match your sign(det) behavior (broadcast over rows)
+  total_gradient .*= sign.(determinant)
 
-  #filter out the rows that contain inf or NaN values
+  # filter out rows with NaN/Inf (same as your code)
   mask = all(.!isinf.(total_gradient) .& .!isnan.(total_gradient), dims=2)
   total_gradient = total_gradient[vec(mask), :]
 
-  #total_gradient[:, 1:(end-2)] .= 0.0
-
-  res  = mean(total_gradient, dims=1)
+  # same output type/shape: 1×P row
+  res = mean(total_gradient, dims=1)
 
   return res
 end
@@ -523,7 +481,7 @@ function getNextPointDirection(par, times, initial_states, training_data_structu
   if length(current_ensemble) < 3 || iterator < 100
     gradient_variance = getVarianceGradient(par, out_of_domain_points, current_ensemble, ood_analyzer)
   else
-      gradient_variance = getCovarianceGradient(par, out_of_domain_points, current_ensemble, ood_analyzer)
+    gradient_variance = getCovarianceGradient(par, out_of_domain_points, current_ensemble, ood_analyzer)
   end
 
   gradient_variance = collect(vec(gradient_variance))
@@ -557,7 +515,7 @@ end
 
 function getValidationCost(pars, initial_states)
   cost = 0.0
-  for i in 1:3
+  for i in 1:1
     #tmp_times = vcat(0, training_data_structure.validation_dataframes[i].t)
     tmp_times = training_data_structure.solution_dataframes[i].t
     simulation = model_simulation(pars, tmp_times, i, initial_states)
@@ -568,8 +526,7 @@ function getValidationCost(pars, initial_states)
 
     #simulation = simulation[:, 2:end]
     #cost_trajectory = 1 / size(training_data_structure.validation_dataframes[i], 1) * (sum((simulation[1, :] - training_data_structure.validation_dataframes[i].x1) .^ 2 ./ training_data_structure.max_oscillations[i][1]^2) + sum((simulation[2, :] - training_data_structure.validation_dataframes[i].x2) .^ 2 ./ training_data_structure.max_oscillations[i][2]^2))
-    cost_trajectory = 1 / size(training_data_structure.solution_dataframes[i], 1) * (sum((simulation[1, :] - training_data_structure.solution_dataframes[i].x1) .^ 2 ./ training_data_structure.max_oscillations[i][1]^2) + sum((simulation[2, :] - training_data_structure.solution_dataframes[i].x2) .^ 2 ./ training_data_structure.max_oscillations[i][2]^2))
-    cost += cost_trajectory
+    cost_trajectory = 1 / size(training_data_structure.solution_dataframes[i], 1) * (sum([sum(simulation[j, :] .- training_data_structure.validation_dataframes[i][!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[i][j]^2 for j in 1:(size(training_data_structure.validation_dataframes[i], 2)-1)]))
   end
   return cost
 end
@@ -771,45 +728,45 @@ else
               reprojection_trajectory = reprojection_trajectory + 1
               if validation_cost > 0.9 * validation_cost_threshold
                 @error "The validation cost is not low enough, I stop the optimization " * string(validation_cost)
-                throw("Validation too high") 
+                throw("Validation too high")
               end
               @info "Validation cost after reoptimization: " validation_cost
             catch e
               @error "Exception " * string(e)
               @warn "Error during parameter reprojection trying going backward in the trajectory"
               backward_looking = 1
-                optimized = false
+              optimized = false
 
-                while optimized == false 
-                  @info "trying to go backward " * string(backward_looking) * " times"
-                  try
+              while optimized == false
+                @info "trying to go backward " * string(backward_looking) * " times"
+                try
 
-                    if backward_looking == length(current_trajectory) || backward_looking > 10
-                      @error "I cannot go backward anymore, I stop the optimization"
-                      push!(current_trajectory, iteration_original_parameters)
-                      break
-                    end
-
-                    new_suggestion = getReoptimizedParameters(current_trajectory[end-backward_looking], integrator, sensealg)
-                    validation_cost = getValidationCost(new_suggestion, initial_states)
-                    push!(validation_costs, -1.0)
-                    step_size = 0.1
-                    reprojection_trajectory = reprojection_trajectory + 1
-                    optimized = true
-                    if validation_cost > 0.9 * validation_cost_threshold
-                      @error "The validation cost is not low enough, I stop the optimization"
-                      #throw an exception
-                      throw("Validation too high")                      
-                      #push!(current_trajectory, iteration_original_parameters)
-                      #break
-                    end
-                  catch 
-                    @warn "Error during parameter reprojection also with stiff configurations"
-                    validation_cost = original_validation_cost
-                    optimized = false
-                    backward_looking += 1
+                  if backward_looking == length(current_trajectory) || backward_looking > 10
+                    @error "I cannot go backward anymore, I stop the optimization"
+                    push!(current_trajectory, iteration_original_parameters)
+                    break
                   end
+
+                  new_suggestion = getReoptimizedParameters(current_trajectory[end-backward_looking], integrator, sensealg)
+                  validation_cost = getValidationCost(new_suggestion, initial_states)
+                  push!(validation_costs, -1.0)
+                  step_size = 0.1
+                  reprojection_trajectory = reprojection_trajectory + 1
+                  optimized = true
+                  if validation_cost > 0.9 * validation_cost_threshold
+                    @error "The validation cost is not low enough, I stop the optimization"
+                    #throw an exception
+                    throw("Validation too high")
+                    #push!(current_trajectory, iteration_original_parameters)
+                    #break
+                  end
+                catch
+                  @warn "Error during parameter reprojection also with stiff configurations"
+                  validation_cost = original_validation_cost
+                  optimized = false
+                  backward_looking += 1
                 end
+              end
             end
 
 
@@ -877,7 +834,7 @@ else
               out_of_domain_analysis = out_of_domain_variability.getOutOfDomainAnalysis(ood_analyzer, current_ensemble)
               push!(cicps, out_of_domain_analysis.cicp)
 
-              @info "Visualizing the OOD statistics "
+              #= @info "Visualizing the OOD statistics "
               out_of_domain_plots = out_of_domain_variability.plotOutOfDomainAnalysis(ood_analyzer, out_of_domain_analysis)
 
               cicp_file_name = debug_folder * "/cicp_" * string(traj_number) * "_" * string(iterator) * ".png"
@@ -898,7 +855,7 @@ else
 
               validation_traj_3_file_name = debug_folder * "/validation_traj_3_iter_" * string(iterator) * ".png"
               traj_training_plot = diagnostic_training_set.printValidationPlots(new_suggestion, original_times, 3, initial_states, prob_uode_pred, integrator, reltol, abstol, training_data_structure)
-              Plots.savefig(traj_training_plot, validation_traj_3_file_name)
+              Plots.savefig(traj_training_plot, validation_traj_3_file_name) =#
 
             end
           end
@@ -949,20 +906,17 @@ else
 
   #saving the ensemble with the actual physicial parameters
   for i in axes(ensemble, 1)
-    ensemble[i].α = original_α * ensemble[i].α
-    ensemble[i].δ = original_δ * ensemble[i].δ
+    ensemble[i].ode_par = original_parameters_ude * ensemble[i].ode_par
   end
 
   #saving the reprojected enesmble with the actual physical parameters
   for i in axes(new_ensemble, 1)
-    new_ensemble[i].α = original_α * new_ensemble[i].α
-    new_ensemble[i].δ = original_δ * new_ensemble[i].δ
+    new_ensemble[i].ode_par = original_parameters_ude * new_ensemble[i].ode_par
   end
 
   #saving the original ensemble with the actual physical parameters
   for i in axes(naive_ensemble_reference, 1)
-    naive_ensemble_reference[i].α = naive_ensemble_reference[i].α * (upper_bounds[1] - lower_bounds[1]) + lower_bounds[1]
-    naive_ensemble_reference[i].δ = naive_ensemble_reference[i].δ * (upper_bounds[2] - lower_bounds[2]) + lower_bounds[2]
+    naive_ensemble_reference[i].ode_par .= naive_ensemble_reference[i].ode_par. * (upper_bounds[1] - lower_bounds[1]) + lower_bounds[1]
   end
   @info "Saving the results"
 
@@ -978,7 +932,7 @@ else
 
   #save the results
   serialize(result_folder * "/results.jld", results)
-  serialize(result_folder * "/trajectories_lv.jld", trajectories)
-  serialize(result_folder * "/variances_lv.jld", variances)
-  serialize(result_folder * "/cicps_lv.jld", total_cicps)
+  serialize(result_folder * "/trajectories.jld", trajectories)
+  serialize(result_folder * "/variances.jld", variances)
+  serialize(result_folder * "/cicps.jld", total_cicps)
 end
