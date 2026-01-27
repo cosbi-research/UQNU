@@ -9,6 +9,8 @@ export compute_confidence_ellipse
 export is_point_inside_ellipse
 export get_ellipse_volume
 
+global data_to_save = []
+
 function get_Hotelling_critical_value(sample_size, confidence, dimension)
 
     # Degrees of freedom
@@ -25,6 +27,7 @@ function get_Hotelling_critical_value(sample_size, confidence, dimension)
 end
 
 function compute_confidence_ellipse(data::Matrix, confidence_level::Float64=0.95)
+
     # Step 1: Compute mean and covariance
     mean_vec = mean(data, dims=1)'
     cov_matrix = cov(data)
@@ -37,6 +40,9 @@ function compute_confidence_ellipse(data::Matrix, confidence_level::Float64=0.95
 
     dimension = size(eig_vals[eig_vals .> 1e-12], 1)  # Effective dimensionality of the data
     # Step 3: Scale axes based on Hotelling distribution
+    println("Dimension of the ellipse: ", dimension)
+    println("Size data: ", size(data, 1))
+    println("Confidence level: ", confidence_level)
     statistics_value = get_Hotelling_critical_value(size(data, 1), confidence_level, dimension)  # Hotelling's T^2 value for confidence level
     #axes_lengths = sqrt.(eig_vals * statistics_value / size(data, 1))
     # It's not the confidence interval on the mean

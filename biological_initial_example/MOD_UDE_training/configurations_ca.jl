@@ -2,8 +2,8 @@
 
 # numerical integrator
 integrator = TRBDF2(autodiff=true);
-abstol = 1e-7
-reltol = 1e-6
+abstol = 1e-4
+reltol = 1e-5
 sensealg = QuadratureAdjoint(autojacvec=ReverseDiffVJP(true))
 
 function get_uode_model_function(appr_neural_network, state, original_parameters)
@@ -57,15 +57,15 @@ get_vector_field_function = function (appr_neural_network, state, original_param
             #@infiltrate
             ode_par = p.ode_par.* original_parameters
 
-            û = appr_neural_network(view(u, [1, 4, 5, 6, 7, 8]), p.p_net, st)[1]# Network prediction
-            du_1 = -ode_par[1]*u[4]*u[1] + ode_par[2]*u[5]
-            du_2 = ode_par[3]*u[5] - ode_par[4]*u[2]*u[3] + ode_par[5]*u[6] + ode_par[6]*u[6]
-            du_3 = -ode_par[4]*u[2]*u[3] + ode_par[5]*u[6]
-            du_4 = û[1]
-            du_5 = -ode_par[3]*u[5] + ode_par[1]*u[4]*u[1] - ode_par[2]*u[5]
-            du_6 = -ode_par[6]*u[6] + ode_par[4]*u[2]*u[3] - ode_par[5]*u[6]
-            du_7 = max(min(-ode_par[7]*u[7]*u[4] + ode_par[8]*u[8] + ode_par[9]*u[8], 10^5), -10^5)
-            du_8 = max(min(ode_par[7]*u[7]*u[4] - ode_par[8]*u[8] - ode_par[9]*u[8], 10^5), -10^5)
+            û = appr_neural_network(view(u, [1, 4, 5, 6, 7, 8], :), p.p_net, st)[1]# Network prediction
+            du_1 = -ode_par[1]*u[4].*u[1, :] .+ ode_par[2].*u[5,:]
+            du_2 = ode_par[3].*u[5, :] .- ode_par[4].*u[2,:].*u[3,:] .+ ode_par[5].*u[6,:] .+ ode_par[6].*u[6,:]
+            du_3 = ode_par[4].*u[2,:].*u[3,:] .+ ode_par[5].*u[6,:]
+            du_4 = û[1,:]
+            du_5 = -ode_par[3].*u[5,:] .+ ode_par[1].*u[4,:].*u[1,:] .- ode_par[2].*u[5,:]
+            du_6 = -ode_par[6].*u[6,:] .+ ode_par[4].*u[2,:].*u[3,:] .- ode_par[5].*u[6,:]
+            du_7 = max.(min.(-ode_par[7].*u[7,:].*u[4,:] .+ ode_par[8].*u[8,:] .+ ode_par[9].*u[8,:], 10^5), -10^5)
+            du_8 = max.(min.(ode_par[7].*u[7,:].*u[4,:] .- ode_par[8].*u[8,:] .- ode_par[9].*u[8,:], 10^5), -10^5)
 
             return [du_1'; du_2'; du_3'; du_4'; du_5'; du_6'; du_7'; du_8']
         end

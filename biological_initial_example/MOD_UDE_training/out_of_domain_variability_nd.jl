@@ -12,14 +12,14 @@ mutable struct out_of_domain_var_nd
     ground_truth_function::Function
     experimental_points::Array{Array{Float64}}
     ground_truth_y::Array{Array{Float64}}
-    points::Array{Array{Float64}}
+    points::Array{Float64}
     dimension::Int
 end
 
 function computeGroundTruth(out_of_domain_grid)
     #create two matrixes with the same number of elements as x * y
     
-    out_of_domain_grid.ground_truth_y = [out_of_domain_grid.ground_truth_function(point) for point in out_of_domain_grid.points]
+    out_of_domain_grid.ground_truth_y = [out_of_domain_grid.ground_truth_function(out_of_domain_grid.points[:, i]) for i in axes(out_of_domain_grid.points, 2)]
     
     @info "Ground truth vector field computed"
 
@@ -38,6 +38,9 @@ function computePoints(out_of_domain_grid)
                 point[d] = out_of_domain_grid.ranges[d][1] + (out_of_domain_grid.ranges[d][2] - out_of_domain_grid.ranges[d][1]) * point[d]
             end
         end
+    
+        #each column is a point
+        points = hcat(points...) # each row is a point
         
         out_of_domain_grid.points = points
         return 
@@ -95,7 +98,7 @@ end
 #perform analysis of out of domain generalization in a single point
 function getOutOfDomainAnalysisInSinglePoint(out_of_domain_grid, ensemble, ground_truth, point_index)
     #get the predictions of the ensemble on the out of domain grid
-    predictions = get_ensemble_predictions(out_of_domain_grid, ensemble, out_of_domain_grid.points[x_index])
+    predictions = get_ensemble_predictions(out_of_domain_grid, ensemble, out_of_domain_grid.points[:, point_index])
 
     mean_dy = [mean([pred[i] for pred in predictions]) for i in 1:out_of_domain_grid.dimension]
 
@@ -143,7 +146,8 @@ end
 function getOutOfDomainDistance(out_of_domain_grid)
     points = out_of_domain_grid.points
     distances = []
-    for point in points
+    for j in axes(points, 2)
+        point = points[:, j]
         minDistance = Inf
         for experimental_point in out_of_domain_grid.experimental_points
             tmp = getDistance(point, experimental_point)

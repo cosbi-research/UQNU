@@ -177,11 +177,12 @@ times = times[1:1:end]
 function get_Hessian(parameters_to_consider, times, initial_states, training_data_structure)
 
   #first trajectory
-  sensitivity_matrix_first_trajectory = Zygote.jacobian(p -> model_simulation(p, times, 1, initial_states), parameters_to_consider)[1] .* parameters_to_consider'
+  sampled_times = sort(times[sample(eachindex(times), 10; replace=false)])
+  sensitivity_matrix_first_trajectory = Zygote.jacobian(p -> model_simulation(p, sampled_times, 1, initial_states), parameters_to_consider)[1] .* parameters_to_consider'
 
   sensitivity_matrix = vcat(sensitivity_matrix_first_trajectory,)
 
-  multiplicative_factor_array = repeat(training_data_structure.max_oscillations, outer=size(times, 1))
+  multiplicative_factor_array = repeat(training_data_structure.max_oscillations, outer=size(sampled_times, 1))
 
   multiplicative_factor_matrix = Diagonal(multiplicative_factor_array)
 
@@ -193,11 +194,13 @@ end
 function get_Hessian_not_proportional(parameters_to_consider, times, initial_states, training_data_structure)
 
   #first trajectory
-  sensitivity_matrix_first_trajectory = Zygote.jacobian(p -> model_simulation(p, times, 1, initial_states), parameters_to_consider)[1]
+  sampled_times = sort(times[sample(eachindex(times), 10; replace=false)])
+
+  sensitivity_matrix_first_trajectory = Zygote.jacobian(p -> model_simulation(p, sampled_times, 1, initial_states), parameters_to_consider)[1]
 
   sensitivity_matrix = vcat(sensitivity_matrix_first_trajectory,)
 
-  multiplicative_factor_array = repeat(training_data_structure.max_oscillations, outer=size(times, 1))
+  multiplicative_factor_array = repeat(training_data_structure.max_oscillations, outer=size(sampled_times, 1))
 
   multiplicative_factor_matrix = Diagonal(multiplicative_factor_array)
 
@@ -223,7 +226,7 @@ function getEigenDempositionHessianNotProportional(par, times, initial_states, t
   eigen_decomposition = eigen(Symmetric(hessian))
   return eigen_decomposition
 end
-
+ 
 function getSampling(par, sample_number, times, initial_states, training_data_structure, parameter_index)
   eigenDecomposition = getEigenDempositionHessian(par, times, initial_states, training_data_structure, parameter_index)
   eigenvalues = eigenDecomposition.values
@@ -353,11 +356,11 @@ end
 
 function getVarianceGradient(par, points, total_ensemble, ood_analyzer)
 
-  selected_indexes = sample(1:length(points), 25, replace=false)
+  selected_indexes = sample(1:size(points, 2), 25, replace=false)
   selected_tmp_points = points[:, selected_indexes]
 
-  ensemble_predictions = out_of_domain_variability.get_ensemble_predictions(ood_analyzer, total_ensemble, selected_tmp_points)
-  current_prediction = out_of_domain_variability.get_ensemble_predictions(ood_analyzer, [par], selected_tmp_points)[1]
+  ensemble_predictions = out_of_domain_variability_nd.get_ensemble_predictions(ood_analyzer, total_ensemble, selected_tmp_points)
+  current_prediction = out_of_domain_variability_nd.get_ensemble_predictions(ood_analyzer, [par], selected_tmp_points)[1]
 
   #get the mean of the prediction at each point
   stacked_predictions = cat(ensemble_predictions..., dims=3)
@@ -365,16 +368,17 @@ function getVarianceGradient(par, points, total_ensemble, ood_analyzer)
   mean_prediction = mean_prediction[:, :, 1]
 
   #First variable of the ensemble
-  vector_field = x -> vector_field_function(selected_tmp_points, x)[1, :]
+  vector_field = x -> vector_field_function(selected_tmp_points, x)
   gradient_vector_field = jacobian(x -> vector_field(x), par)[1]
 
   #@infiltrate
 
   #rows: gradient of the vector field in a point
-  gradient_in_single_points = [2 / size(total_ensemble, k) .* (current_prediction[k, :] .- mean_prediction[k, :]) .* gradient_vector_field for k in 1:size(current_prediction, 1)]
+  numpoints = size(selected_tmp_points, 2)
+  num_variables = size(current_prediction, 1)
+  gradient_in_single_points = [2 / size(total_ensemble, k) .* norm(current_prediction[k, :] .- mean_prediction[k, :]) .* gradient_vector_field[k:num_variables:end,:] for k in 1:size(current_prediction, 1)] 
 
-  ########################### ARRIVATO QUI ####################################
-  variances = repeat(zeros(size(current_prediction[1, :])), size(current_prediction, 1))
+  variances = [zeros(size(current_prediction, 2)) for _ in 1:size(current_prediction, 1)]
   for k in 1:size(current_prediction, 1)
     variances[k] = zeros(size(current_prediction[1, :]))
     for i in axes(stacked_predictions, 3)
@@ -482,7 +486,7 @@ function getNextPointDirection(par, times, initial_states, training_data_structu
   if length(current_ensemble) < 3 || iterator < 100
     gradient_variance = getVarianceGradient(par, out_of_domain_points, current_ensemble, ood_analyzer)
   else
-    gradient_variance = getCovarianceGradient(par, out_of_domain_points, current_ensemble, ood_analyzer)
+    gradient_variance = getCovarianceGradient_n(par, out_of_domain_points, current_ensemble, ood_analyzer)
   end
 
   gradient_variance = collect(vec(gradient_variance))
@@ -528,7 +532,7 @@ function getValidationCost(pars, initial_states)
       Plots.scatter!(plt, training_data_structure.solution_dataframes[i].t, training_data_structure.solution_dataframes[i][!, j+1], label="Data " * string(j))
     end =#
 
-    display(plt)
+    #display(plt)
 
     if simulation == Inf
       return Inf
@@ -630,7 +634,7 @@ else
 
         sampled_index_for_trajectory = sampled_indexes_trajectories[traj_number]
         step_size = 1.0
-        min_step_size = 1e-3
+        min_step_size = 1e-5
         max_step_size = 10^2
 
         iteration_performed = 0
@@ -651,7 +655,7 @@ else
             sampled_indexes = sample(2:100, 20, replace=false)
             push!(sampled_indexes, 1)
             sampled_indexes = sort(sampled_indexes)
-            tmp_times = times[sampled_indexes]
+            tmp_times = times
             new_suggestion_direction = getNextPointDirection(current_ensemble[end], tmp_times, initial_states, training_data_structure, selected_points, current_ensemble, ood_analyzer, sampled_index_for_trajectory, step_size, nothing, iterator)
 
 
@@ -802,7 +806,7 @@ else
             average_variance_before = 0.0
           else
             #average_variance_before = out_of_domain_variability.getAverageVariance(ood_analyzer, current_ensemble)
-            average_variance_before = out_of_domain_variability.getVarianceInPoints(ood_analyzer, current_ensemble, selected_points)
+            average_variance_before = out_of_domain_variability_nd.getVarianceInPoints(ood_analyzer, current_ensemble, selected_points)
           end
 
           @info "Average variance before: " average_variance_before
@@ -830,12 +834,12 @@ else
           end
 
           #variance = out_of_domain_variability.getAverageVariance(ood_analyzer, current_ensemble)
-          variance = out_of_domain_variability.getVarianceInPoints(ood_analyzer, current_ensemble, selected_points)
+          variance = out_of_domain_variability_nd.getVarianceInPoints(ood_analyzer, current_ensemble, selected_points)
           @info "Iteration: " iterator
           @info "Population size: " length(parameter_populations)
           @info "Current ensemble size: " length(current_ensemble)
           @info "Average variance: " variance
-          @info "Physical parameters values: " * string(new_suggestion.α) * ", " * string(new_suggestion.δ) * ", original values " * string(original_parameters.α) * ", " * string(original_parameters.δ)
+          @info "Physical parameters values: " * string(new_suggestion.ode_par)
 
           push!(current_variances, variance)
 
@@ -843,7 +847,8 @@ else
           @debug "At the end of the iteration, I compute the summary statistcs over the Out of domain region"
           if size(current_ensemble, 1) > 3 && iterator % 10 == 1
             if loglevel <= Logging.Info
-              out_of_domain_analysis = out_of_domain_variability.getOutOfDomainAnalysis(ood_analyzer, current_ensemble)
+              global data_to_save = []
+              out_of_domain_analysis = out_of_domain_variability_nd.getOutOfDomainAnalysis(ood_analyzer, current_ensemble)
               push!(cicps, out_of_domain_analysis.cicp)
 
               #= @info "Visualizing the OOD statistics "
@@ -918,17 +923,17 @@ else
 
   #saving the ensemble with the actual physicial parameters
   for i in axes(ensemble, 1)
-    ensemble[i].ode_par = original_parameters_ude * ensemble[i].ode_par
+    ensemble[i].ode_par = original_parameters_ude .* ensemble[i].ode_par
   end
 
   #saving the reprojected enesmble with the actual physical parameters
   for i in axes(new_ensemble, 1)
-    new_ensemble[i].ode_par = original_parameters_ude * new_ensemble[i].ode_par
+    new_ensemble[i].ode_par = original_parameters_ude .* new_ensemble[i].ode_par
   end
 
   #saving the original ensemble with the actual physical parameters
   for i in axes(naive_ensemble_reference, 1)
-    naive_ensemble_reference[i].ode_par .= naive_ensemble_reference[i].ode_par. * (upper_bounds[1] - lower_bounds[1]) + lower_bounds[1]
+    naive_ensemble_reference[i].ode_par .= naive_ensemble_reference[i].ode_par .* (upper_bounds .- lower_bounds) .+ lower_bounds
   end
   @info "Saving the results"
 

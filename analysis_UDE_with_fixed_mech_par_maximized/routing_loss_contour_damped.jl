@@ -11,8 +11,8 @@ debug_folder = "debug_damped"
 result_folder = "result_damped"
 
 #parse the starting point index 
-#starting_point_index = 1
-starting_point_index = parse(Int, ARGS[1])
+starting_point_index = 1
+#starting_point_index = parse(Int, ARGS[1])
 @info "Starting point index: " starting_point_index
 
 result_folder = result_folder * string(starting_point_index)
