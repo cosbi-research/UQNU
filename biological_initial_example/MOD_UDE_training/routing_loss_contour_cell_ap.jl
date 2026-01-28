@@ -483,7 +483,7 @@ function getNextPointDirection(par, times, initial_states, training_data_structu
   sloppy_eigenvectors = eigenDecomposition.vectors[:, eigenvalues.<1e-1]
 
   gradient_variance = nothing
-  if length(current_ensemble) < 3 || iterator < 100
+  if length(current_ensemble) < 8 || iterator < 100
     gradient_variance = getVarianceGradient(par, out_of_domain_points, current_ensemble, ood_analyzer)
   else
     gradient_variance = getCovarianceGradient_n(par, out_of_domain_points, current_ensemble, ood_analyzer)
@@ -546,7 +546,7 @@ function getValidationCost(pars, initial_states)
 end
 
 #naive implementation of monte-carlo sampling
-number_iterations_for_trajectory = 800
+number_iterations_for_trajectory = 50
 validation_cost_threshold = 1e-3
 
 parameter_populations = [parameters .+ 0.0]
@@ -845,7 +845,7 @@ else
 
           #computes the analysis for out-of-domain generalization
           @debug "At the end of the iteration, I compute the summary statistcs over the Out of domain region"
-          if size(current_ensemble, 1) > 3 && iterator % 10 == 1
+          if size(current_ensemble, 1) > 8 && iterator % 10 == 1
             if loglevel <= Logging.Info
               global data_to_save = []
               out_of_domain_analysis = out_of_domain_variability_nd.getOutOfDomainAnalysis(ood_analyzer, current_ensemble)
