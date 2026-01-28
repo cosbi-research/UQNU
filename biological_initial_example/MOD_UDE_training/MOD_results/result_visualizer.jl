@@ -157,6 +157,7 @@ datafile = "../../data_generator/cell_apoptosis_silico_data_no_noise.jld"
 solutions_dataframe = deserialize(datafile)
 
 death_trajectory_contained = []
+MOD_death_trajectory_contained = []
 #### DEATH CONDITION ANALYSIS  ######
 for ensemble_index in 1:10
 
@@ -178,6 +179,7 @@ for ensemble_index in 1:10
   variable_plots = []
 
   predictions = []
+  MOD_predictions = []
   
   for res in naive_ensemble
 
@@ -273,9 +275,8 @@ for ensemble_index in 1:10
   #circle the forth variable which is the observable
   savefig(p, "cell_apop_UDE_results/v_se_death_$ensemble_index.png")
 
-  predictions = []
-  
-  for res in naive_ensemble
+
+   for res in MOD_ensemble
 
     global variable_plots
 
@@ -325,7 +326,7 @@ for ensemble_index in 1:10
       continue
     end
 
-    push!(predictions, sol)
+    push!(MOD_predictions, sol)
 
     #plot the results towards the training data 
     if length(variable_plots) == 0
@@ -367,12 +368,14 @@ for ensemble_index in 1:10
   #plot in a grid layout
   p = Plots.plot(variable_plots..., layout=(4, 2), size=(900, 900))
   #circle the forth variable which is the observable
-  savefig(p, "cell_apop_UDE_results/v_se_death_$ensemble_index)_MOD.png")
-
+  savefig(p, "cell_apop_UDE_results/v_se_death_MOD_$ensemble_index.png")
 
   #for each time, i compute the mean and std of the predictions
   mean_prediction = zeros(size(predictions[1]))
   std_prediction = zeros(size(predictions[1]))
+
+  MOD_mean_prediction = zeros(size(MOD_predictions[1]))
+  MOD_std_prediction = zeros(size(MOD_predictions[1]))
 
   for t_index in 1:size(predictions[1], 2)
     #collect all predictions at this time
@@ -380,11 +383,17 @@ for ensemble_index in 1:10
     #compute mean and std
     mean_prediction[:, t_index] = mean(hcat(preds_at_t...), dims=2)[:]
     std_prediction[:, t_index] = std(hcat(preds_at_t...), dims=2)[:]
+
+    MOD_preds_at_t = [MOD_predictions[i][:, t_index] for i in 1:length(MOD_predictions)]
+    #compute mean and std
+    MOD_mean_prediction[:, t_index] = mean(hcat(MOD_preds_at_t...), dims=2)[:]
+    MOD_std_prediction[:, t_index] = std(hcat(MOD_preds_at_t...), dims=2)[:]
   end
 
   #try and visualize the results with 1.96 * std as confidence interval
   variable_plots = []
   variable_contained_in_ci = []
+  MOD_variable_contained_in_ci = []
   for var_index in 1:size(training_datas[1], 1)
 
     p = Plots.scatter(
@@ -404,18 +413,25 @@ for ensemble_index in 1:10
     #plot the confidence interval
     upper_bound = mean_prediction[var_index, :] .+ t_value * sqrt(1 + 1 / n_ensemble) * std_prediction[var_index, :]
     lower_bound = mean_prediction[var_index, :] .- t_value * sqrt(1 + 1 / n_ensemble) * std_prediction[var_index, :]
+    upper_bound_MOD = MOD_mean_prediction[var_index, :] .+ t_value * sqrt(1 + 1 / n_ensemble) * MOD_std_prediction[var_index, :]
+    lower_bound_MOD = MOD_mean_prediction[var_index, :] .- t_value * sqrt(1 + 1 / n_ensemble) * MOD_std_prediction[var_index, :]
     plot!(p, solutions_dataframe.t, upper_bound, lw=1, ls=:dot, color=:orange, label="95% CI")
     plot!(p, solutions_dataframe.t, lower_bound, lw=1, ls=:dot, color=:orange, label="")
+    plot!(p, solutions_dataframe.t, upper_bound_MOD, lw=1, ls=:dashdot, color=:green, label="95% CI MOD")
+    plot!(p, solutions_dataframe.t, lower_bound_MOD, lw=1, ls=:dashdot, color=:green, label="")
     #fill between upper and lower bound
     Plots.plot!(p, solutions_dataframe.t, upper_bound, fillrange=lower_bound, fillalpha=0.2, fillcolor=:orange, label="")
+    Plots.plot!(p, solutions_dataframe.t, upper_bound_MOD, fillrange=lower_bound_MOD, fillalpha=0.2, fillcolor=:green, label="")
     Plots.plot!(p, legend=nothing)
 
     #check if the variable is inside the confidence interval
     observations = solutions_dataframe[:, var_index+1]
     epsilon = 1e-4
     inside_ci = ((observations .>= (lower_bound .- epsilon)) .& (observations .<= (upper_bound .+ epsilon)))
+    inside_ci_MOD = ((observations .>= (lower_bound_MOD .- epsilon)) .& (observations .<= (upper_bound_MOD .+ epsilon)))
 
     push!(variable_contained_in_ci, inside_ci)
+    push!(MOD_variable_contained_in_ci, inside_ci_MOD)
 
     #range 0-1 for y axis
     y_min = minimum(solutions_dataframe[:, var_index+1])
@@ -443,6 +459,22 @@ for ensemble_index in 1:10
 
   push!(death_trajectory_contained, contained_points)
 
+  contained_points_MOD = zeros(size(MOD_variable_contained_in_ci[1]))
+  for t_index in 1:length(contained_points_MOD)
+    contained = 1
+    for var_index in observables
+      if !MOD_variable_contained_in_ci[var_index][t_index]
+        contained = 0
+        break
+      end
+    end
+    contained_points_MOD[t_index] = contained
+  end
+
+  contained_points_MOD = sum(contained_points_MOD) / length(contained_points_MOD)
+
+  push!(MOD_death_trajectory_contained, contained_points_MOD)
+
   #plot in a grid layout
   p = Plots.plot(variable_plots..., layout=(4, 2), size=(900, 900))
   #circle the forth variable which is the observable
@@ -450,12 +482,15 @@ for ensemble_index in 1:10
 end
 
 serialize("cell_apop_UDE_results/trajectory_contained_in_ci_death.jld", death_trajectory_contained)
+serialize("cell_apop_UDE_results/MOD_trajectory_contained_in_ci_death.jld", MOD_death_trajectory_contained)
 
 datafile = "../../data_generator/cell_apoptosis_silico_data_survival.jld"
 solutions_dataframe = deserialize(datafile)
 
 #####SURVIVAL CONDITION ANALYSIS #########
 survival_trajectory_contained = []
+MOD_survival_trajectory_contained = []
+
 for ensemble_index in 1:10
 
   global solution_dataframes
@@ -697,6 +732,8 @@ for ensemble_index in 1:10
   #try and visualize the results with 1.96 * std as confidence interval
   variable_plots = []
   variable_contained_in_ci = []
+  MOD_variable_contained_in_ci = []
+
   for var_index in 1:size(training_datas[1], 1)
 
     p = Plots.scatter(
@@ -736,7 +773,10 @@ for ensemble_index in 1:10
     epsilon = 1e-4
     inside_ci = ((observations .>= (lower_bound .- epsilon)) .& (observations .<= (upper_bound .+ epsilon)))
 
+    MOD_inside_ci = ((observations .>= (lower_bound_MOD .- epsilon)) .& (observations .<= (upper_bound_MOD .+ epsilon)))
+
     push!(variable_contained_in_ci, inside_ci)
+    push!(MOD_variable_contained_in_ci, MOD_inside_ci)
 
     #range 0-1 for y axis
     y_min = minimum(solutions_dataframe[:, var_index+1])
@@ -762,7 +802,21 @@ for ensemble_index in 1:10
   end
   contained_points = sum(contained_points) / length(contained_points)
 
+  contained_points_MOD = zeros(size(MOD_variable_contained_in_ci[1]))
+  for t_index in 1:length(contained_points_MOD)
+    contained = 1
+    for var_index in observables
+      if !MOD_variable_contained_in_ci[var_index][t_index]
+        contained = 0
+        break
+      end
+    end
+    contained_points_MOD[t_index] = contained
+  end
+  contained_points_MOD = sum(contained_points_MOD) / length(contained_points_MOD)
+
   push!(survival_trajectory_contained, contained_points)
+  push!(MOD_survival_trajectory_contained, contained_points_MOD)
 
   #plot in a grid layout
   p = Plots.plot(variable_plots..., layout=(4, 2), size=(900, 900))
@@ -773,6 +827,7 @@ end
 #trying and simulate the model on the other initial conditions (cell death)
 #save the contained in ci 
 serialize("cell_apop_UDE_results/trajectory_contained_in_ci_survival.jld", survival_trajectory_contained)
+serialize("cell_apop_UDE_results/MOD_trajectory_contained_in_ci_survival.jld", MOD_survival_trajectory_contained)
 
 # put together death and survival trajectory contained in ci and write in a txt file
 total_trajectory_contained = vcat(death_trajectory_contained, survival_trajectory_contained)
@@ -783,6 +838,14 @@ open("cell_apop_UDE_results/total_trajectory_contained_in_ci.txt", "w") do io
   end
   println(io, "Trajectory contained in CI for survival conditions:")
   for value in survival_trajectory_contained
+    println(io, value)
+  end
+  println(io, "Trajectory contained in CI for MOD death conditions:")
+  for value in MOD_death_trajectory_contained
+    println(io, value)
+  end
+  println(io, "Trajectory contained in CI for MOD survival conditions:")
+  for value in MOD_survival_trajectory_contained
     println(io, value)
   end
 end
