@@ -15,7 +15,7 @@ maxiters = 1000
 observables = [4,]
 
 #parse the starting point index 
-starting_point_index = 1
+starting_point_index = 3
 #TODO ripristinare
 #starting_point_index = parse(Int, ARGS[1])
 @info "Starting point index: " starting_point_index
@@ -71,10 +71,11 @@ lower_bounds = single_parameter_training.lower_parameter_boundaries
 upper_bounds = single_parameter_training.upper_parameter_boundaries
 
 parameters = deepcopy(single_parameter_training.training_res.p)
-original_parameters_ude = parameters.ode_par .* (upper_bounds .- lower_bounds) .+ lower_bounds
+original_parameters_ude = deepcopy(parameters.ode_par .* (upper_bounds .- lower_bounds) .+ lower_bounds)
 parameters.ode_par .= 1.0
 
 naive_ensemble_reference = [res.training_res.p for res in trained_ensemble[ensemble_interval_begin:ensemble_interval_end]]
+naive_ensemble_reference_initial_states = [res.training_res.u0 for res in trained_ensemble[ensemble_interval_begin:ensemble_interval_end]]
 
 ################################### separate in the required structure ##########################
 p_net, st = Lux.setup(rng, approximating_neural_network)
@@ -105,7 +106,7 @@ end
 
 ranges = [(bounding_box_df[i, 2], bounding_box_df[i, 3]) for i in 1:size(bounding_box_df, 1)]
 
-ood_analyzer = out_of_domain_variability_nd.out_of_domain_var_nd(ranges, 100, vector_field_function, ca_gound_truth, experimental_points, [], [], 8)
+ood_analyzer = out_of_domain_variability_nd.out_of_domain_var_nd(ranges, 1000, vector_field_function, ca_gound_truth, experimental_points, [], [], 8)
 out_of_domain_variability_nd.computePoints(ood_analyzer)
 out_of_domain_variability_nd.computeGroundTruth(ood_analyzer)
 
@@ -114,7 +115,7 @@ out_of_domain_points = ood_analyzer.points
 #get the distance between the training domain and the out of domain points
 distances_from_training_set = out_of_domain_variability_nd.getOutOfDomainDistance(ood_analyzer)
 
-function model_simulation(θ, t, trajectory, initial_states, integrator=integrator, sensealg=sensealg, prob_uode_pred=prob_uode_pred)
+function model_simulation(θ, t, trajectory, initial_states, tmp_observables=nothing, integrator=integrator, sensealg=sensealg, prob_uode_pred=prob_uode_pred)
   if trajectory == 1
     trajectory_sol = solve(
       remake(
@@ -166,7 +167,12 @@ function model_simulation(θ, t, trajectory, initial_states, integrator=integrat
     return Inf
   end
 
-  return Array(trajectory_sol)
+  res = Array(trajectory_sol)
+  if tmp_observables != nothing
+    return res[tmp_observables, :]
+  else
+    return res
+  end
 end
 
 times = training_data_structure.solution_dataframes[1].t
@@ -178,11 +184,11 @@ function get_Hessian(parameters_to_consider, times, initial_states, training_dat
 
   #first trajectory
   sampled_times = sort(times[sample(eachindex(times), 10; replace=false)])
-  sensitivity_matrix_first_trajectory = Zygote.jacobian(p -> model_simulation(p, sampled_times, 1, initial_states), parameters_to_consider)[1] .* parameters_to_consider'
+  sensitivity_matrix_first_trajectory = Zygote.jacobian(p -> model_simulation(p, sampled_times, 1, initial_states, observables), parameters_to_consider)[1] .* parameters_to_consider'
 
   sensitivity_matrix = vcat(sensitivity_matrix_first_trajectory,)
 
-  multiplicative_factor_array = repeat(training_data_structure.max_oscillations, outer=size(sampled_times, 1))
+  multiplicative_factor_array = repeat(training_data_structure.max_oscillations[observables], outer=size(sampled_times, 1))
 
   multiplicative_factor_matrix = Diagonal(multiplicative_factor_array)
 
@@ -196,11 +202,12 @@ function get_Hessian_not_proportional(parameters_to_consider, times, initial_sta
   #first trajectory
   sampled_times = sort(times[sample(eachindex(times), 10; replace=false)])
 
-  sensitivity_matrix_first_trajectory = Zygote.jacobian(p -> model_simulation(p, sampled_times, 1, initial_states), parameters_to_consider)[1]
+  sensitivity_matrix_first_trajectory = Zygote.jacobian(p -> model_simulation(p, sampled_times, 1, initial_states, observables), parameters_to_consider)[1]
+
 
   sensitivity_matrix = vcat(sensitivity_matrix_first_trajectory,)
 
-  multiplicative_factor_array = repeat(training_data_structure.max_oscillations, outer=size(sampled_times, 1))
+  multiplicative_factor_array = repeat(training_data_structure.max_oscillations[observables], outer=size(sampled_times, 1))
 
   multiplicative_factor_matrix = Diagonal(multiplicative_factor_array)
 
@@ -228,6 +235,7 @@ function getEigenDempositionHessianNotProportional(par, times, initial_states, t
 end
  
 function getSampling(par, sample_number, times, initial_states, training_data_structure, parameter_index)
+
   eigenDecomposition = getEigenDempositionHessian(par, times, initial_states, training_data_structure, parameter_index)
   eigenvalues = eigenDecomposition.values
   eigenvalues = max.(eigenvalues, 1e-20)
@@ -263,7 +271,7 @@ function costFunctionOnSingleTraj(par, i)
   end
   simulation = simulation[:, 1:end]
 
-  cost_trajectory = 1 / size(original_solutions, 1) * (sum([sum(simulation[j, :] .- original_solutions[!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[j]^2 for j in observables]))
+  cost_trajectory = 1 / size(original_solutions, 1) * (sum([sum((simulation[j, :] .- original_solutions[!, j+1]).^ 2) ./ training_data_structure.max_oscillations[j]^2 for j in observables]))
 
   return cost_trajectory
 end
@@ -271,7 +279,7 @@ end
 function costFunctionOnSingleTraj(par, i, integrator, sensealg, prob_uode_tmp)
   original_solutions = training_data_structure.solution_dataframes[i]
   original_times = original_solutions.t
-  simulation = model_simulation(par, original_times, i, initial_states, integrator, sensealg, prob_uode_tmp)
+  simulation = model_simulation(par, original_times, i, initial_states, nothing, integrator, sensealg, prob_uode_tmp)
 
   if simulation == Inf
     return Inf
@@ -279,7 +287,7 @@ function costFunctionOnSingleTraj(par, i, integrator, sensealg, prob_uode_tmp)
 
   simulation = simulation[:, 1:end]
 
-  cost_trajectory = 1 / size(original_solutions, 1) * (sum([sum(simulation[j, :] .- original_solutions[!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[j]^2 for j in observables]))
+  cost_trajectory = 1 / size(training_data_structure.solution_dataframes[i], 1) * (sum([sum((simulation[j, :] .- training_data_structure.solution_dataframes[i][!, j+1]).^ 2) ./ training_data_structure.max_oscillations[j]^2 for j in observables]))
 
   return cost_trajectory
 end
@@ -325,14 +333,14 @@ function getReoptimizedParameters(par, integrator, sensealg)
 
   res = Optimization.solve(optprob, opt, callback=callback_function, maxiters=20)
 
-  solution = deepcopy(best_solution[1])
+  #= solution = deepcopy(best_solution[1])
   objective = deepcopy(best_objective[1])
   try
     optprob = Optimization.OptimizationProblem(optf, solution)
     res = Optimization.solve(optprob, Optim.LBFGS(), callback=callback_function, maxiters=20)
   catch e
     @warn "Error in the second optimization" e
-  end
+  end =#
 
   solution = deepcopy(best_solution[1])
   objective = deepcopy(best_objective[1])
@@ -356,8 +364,9 @@ end
 
 function getVarianceGradient(par, points, total_ensemble, ood_analyzer)
 
-  selected_indexes = sample(1:size(points, 2), 25, replace=false)
+  selected_indexes = sample(1:size(points, 2), 100, replace=false)
   selected_tmp_points = points[:, selected_indexes]
+
 
   ensemble_predictions = out_of_domain_variability_nd.get_ensemble_predictions(ood_analyzer, total_ensemble, selected_tmp_points)
   current_prediction = out_of_domain_variability_nd.get_ensemble_predictions(ood_analyzer, [par], selected_tmp_points)[1]
@@ -386,7 +395,7 @@ function getVarianceGradient(par, points, total_ensemble, ood_analyzer)
     end
   end
 
-  gradient_in_single_points_y = [gradient_in_single_points[k] ./ variances[k] for k in 1:size(current_prediction, 1)]
+  gradient_in_single_points_y = [gradient_in_single_points[k] ./ max.(variances[k], 1e-8) for k in 1:size(current_prediction, 1)]
 
   gradient_variance = reduce(+, [mean(gradient_in_single_points_y[k], dims=1) for k in 1:size(current_prediction, 1)])
 
@@ -475,6 +484,7 @@ function getCovarianceGradient_n(par, points, total_ensemble, ood_analyzer)
 end
 
 function getNextPointDirection(par, times, initial_states, training_data_structure, out_of_domain_points, current_ensemble, ood_analyzer, parameter_index, step_size, trajectories, iterator)
+  
   eigenDecomposition = getEigenDempositionHessianNotProportional(par, times, initial_states, training_data_structure, parameter_index)
   eigenvalues = eigenDecomposition.values
   eigenvalues = max.(eigenvalues, 1e-20)
@@ -518,7 +528,7 @@ function getNextPointDirection(par, times, initial_states, training_data_structu
   return projection
 end
 
-function getValidationCost(pars, initial_states)
+function getValidationCost(pars, initial_states, doplot=false)
   cost = 0.0
   for i in 1:1
     #tmp_times = vcat(0, training_data_structure.validation_dataframes[i].t)
@@ -540,14 +550,41 @@ function getValidationCost(pars, initial_states)
 
     #simulation = simulation[:, 2:end]
     #cost_trajectory = 1 / size(training_data_structure.validation_dataframes[i], 1) * (sum((simulation[1, :] - training_data_structure.validation_dataframes[i].x1) .^ 2 ./ training_data_structure.max_oscillations[i][1]^2) + sum((simulation[2, :] - training_data_structure.validation_dataframes[i].x2) .^ 2 ./ training_data_structure.max_oscillations[i][2]^2))
-    cost += 1 / size(training_data_structure.solution_dataframes[i], 1) * (sum([sum(simulation[j, :] .- training_data_structure.solution_dataframes[i][!, j+1]) .^ 2 ./ training_data_structure.max_oscillations[j]^2 for j in observables]))
+    #cst += 1 / size(training_data_structure.solution_dataframes[i], 1) * (sum([sum((simulation[j, :] .- training_data_structure.solution_dataframes[i][!, j+1]).^ 2) ./ training_data_structure.max_oscillations[j]^2 for j in observables]))
+
+    cost += mean((simulation[observables[1], :] .- training_data_structure.solution_dataframes[i][!, observables[1]+1]) .^ 2 ./ training_data_structure.max_oscillations[observables[1]]^2)
+
+
+    if doplot
+      #plot the simulation against the solution dataframe on the observable variable
+      plt2 = Plots.plot(tmp_times, simulation[observables[1], :], label="Sim", title="Validation Simulation vs Solution Traj " * string(i))
+      #plot the solution dataframe
+      Plots.scatter!(plt2, training_data_structure.solution_dataframes[1].t, training_data_structure.solution_dataframes[1][!, observables[1]+1], label="Data " * string(observables[1]))
+      cost_formatted = round(cost, sigdigits=3)
+      
+      #title reporting the loss
+      Plots.title!(plt2, "Validation Simulation vs Solution Traj " * string(i) * " | Cost: " * string(cost_formatted))
+      
+      #
+      error_distribution = (simulation[observables[1], :] .- training_data_structure.solution_dataframes[i][!, observables[1]+1]) .^ 2 ./ training_data_structure.max_oscillations[observables[1]]^2
+      #histogram of the error distribution
+      plt3 = Plots.histogram(log10.(error_distribution .+ 1e-10), bins=30, title="Error Distribution Traj " * string(i), label="Error")
+
+      cost_recomputed = mean(error_distribution)
+      cost_recomputed_formatted = round(cost_recomputed, sigdigits=3)
+      Plots.title!(plt3, "Error Distribution Traj " * string(i) * " | Cost Recomputed: " * string(cost_recomputed_formatted))
+      #plot the two plot together
+      debug_plot = Plots.plot(plt2, plt3, layout=(2,1))
+
+      display(debug_plot)
+    end
   end
   return cost
 end
 
 #naive implementation of monte-carlo sampling
-number_iterations_for_trajectory = 50
-validation_cost_threshold = 1e-3
+number_iterations_for_trajectory = 100
+validation_cost_threshold = 5e-3
 
 parameter_populations = [parameters .+ 0.0]
 
@@ -573,7 +610,6 @@ sampled_indexes_trajectories = [sort(sample(total_parameter_indexes, 200; replac
 #put always the last two indexes
 
 sampled_indexes_trajectories = [vcat(sampled_indexes_trajectories[i], collect(length(parameters)-length(parameters.ode_par):length(parameters))) for i in 1:number_of_trajectories]
-
 
 #check the validation cost before, if it's more than the threshold exit immediately
 
@@ -634,8 +670,8 @@ else
 
         sampled_index_for_trajectory = sampled_indexes_trajectories[traj_number]
         step_size = 1.0
-        min_step_size = 1e-5
-        max_step_size = 10^2
+        min_step_size = 1e-3
+        max_step_size = 10^3
 
         iteration_performed = 0
 
@@ -649,6 +685,7 @@ else
           new_suggestion = nothing
           if iterator == 1
             new_suggestion = getSampling(current_ensemble[end], 1, times, initial_states, training_data_structure, sampled_index_for_trajectory)
+            new_suggestion.ode_par .= min.(max.(new_suggestion.ode_par, 0.0), 10.0)
           else
 
             #sample randomly 10 number over 1:100
@@ -656,6 +693,7 @@ else
             push!(sampled_indexes, 1)
             sampled_indexes = sort(sampled_indexes)
             tmp_times = times
+
             new_suggestion_direction = getNextPointDirection(current_ensemble[end], tmp_times, initial_states, training_data_structure, selected_points, current_ensemble, ood_analyzer, sampled_index_for_trajectory, step_size, nothing, iterator)
 
 
@@ -663,6 +701,8 @@ else
 
             #new_proposed_parameters = current_ensemble[end] .* (1 .+ step_size .* new_suggestion_direction)
             new_proposed_parameters = current_ensemble[end] .+ step_size .* new_suggestion_direction
+            new_proposed_parameters.ode_par .= min.(max.(new_proposed_parameters.ode_par, 0.0), 10.0)
+
             validation_cost = Inf
             try
               validation_cost = getValidationCost(new_proposed_parameters, initial_states)
@@ -673,7 +713,7 @@ else
 
             previous_validation_cost = validation_costs[end]
 
-            while validation_cost < validation_cost_threshold && (validation_cost - previous_validation_cost) < 0.000001
+            while validation_cost < validation_cost_threshold && (validation_cost - previous_validation_cost) < 0.000005
               @info "The validation cost is decreasing too much, I increase the step size: step_size=" step_size
               step_size = step_size * 2
 
@@ -685,6 +725,7 @@ else
               #move along the directions
               #new_proposed_parameters = current_ensemble[end] .* (1 .+ step_size .* new_suggestion_direction)
               new_proposed_parameters = current_ensemble[end] .+ step_size .* new_suggestion_direction
+             new_proposed_parameters.ode_par .= min.(max.(new_proposed_parameters.ode_par, 0.0), 10.0)
 
               vaidation_cost = Inf
               try
@@ -695,13 +736,14 @@ else
               end
             end
 
-            while validation_cost > validation_cost_threshold || (validation_cost - previous_validation_cost) > 0.00001
+            while validation_cost > validation_cost_threshold || (validation_cost - previous_validation_cost) > 0.00005
 
               @info "The validation cost is increasing too much, I reduce the step size: step_size=" step_size
               step_size = step_size / 2
               #move along the directions
               #new_proposed_parameters = current_ensemble[end] .* (1 .+ step_size .* new_suggestion_direction)
               new_proposed_parameters = current_ensemble[end] .+ step_size .* new_suggestion_direction
+              new_proposed_parameters.ode_par .= min.(max.(new_proposed_parameters.ode_par, 0.0), 10.0)
 
               validation_cost = Inf
               try
@@ -793,10 +835,12 @@ else
             end
           end
 
+          validation_cost = getValidationCost(new_suggestion, initial_states, true)
           push!(validation_costs, validation_cost)
 
           if iterator % 2 == 1 || iterator == number_iterations_for_trajectory
             @info "saving point in current trajectory"
+            @info "New suggestion parameters: " * string(new_suggestion.ode_par)
             push!(current_trajectory, new_suggestion)
           end
 
@@ -909,7 +953,8 @@ else
     new_member = deepcopy(ensemble[ensemble_it])
     if ensemble_it > 1
       try
-        new_member = getReoptimizedParameters(ensemble[ensemble_it], integrator, sensealg)
+        new_member = ensemble[ensemble_it]
+        #new_member = getReoptimizedParameters(ensemble[ensemble_it], integrator, sensealg)
         validation_cost = getValidationCost(new_member, initial_states)
         push!(total_validation_costs[ensemble_it-1], validation_cost)
       catch e
@@ -923,13 +968,13 @@ else
 
   #saving the ensemble with the actual physicial parameters
   for i in axes(ensemble, 1)
-    ensemble[i].ode_par = original_parameters_ude .* ensemble[i].ode_par
+    ensemble[i].ode_par = deepcopy(original_parameters_ude .* ensemble[i].ode_par)
   end
 
   #saving the reprojected enesmble with the actual physical parameters
-  for i in axes(new_ensemble, 1)
-    new_ensemble[i].ode_par = original_parameters_ude .* new_ensemble[i].ode_par
-  end
+#=   for i in axes(new_ensemble, 1)
+    new_ensemble[i].ode_par = deepcopy(original_parameters_ude .* new_ensemble[i].ode_par)
+  end =#
 
   #saving the original ensemble with the actual physical parameters
   for i in axes(naive_ensemble_reference, 1)
@@ -944,7 +989,10 @@ else
     naive_ensemble_number=starting_point_index,
     reprojections=reprojections,
     validation_costs=total_validation_costs,
-    naive_ensemble_reference=naive_ensemble_reference
+    naive_ensemble_reference=naive_ensemble_reference,
+    naive_ensemble_reference_initial_states = naive_ensemble_reference_initial_states,
+    initial_states = initial_states,
+    trajectories = trajectories
   )
 
   #save the results

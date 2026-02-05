@@ -69,9 +69,9 @@ function get_uode_model_function_not_scaled(appr_neural_network, state)
     f(du, u, p, t) =
         let appr_neural_network = appr_neural_network, st = state
              
-            u = max.(min.(u, 10^5), 0.0) # to avoid negative concentrations
+            u = max.(min.(u, 10^5), 10^(-10)) # to avoid negative concentrations
 
-            ode_par = p.ode_par
+            ode_par = max.(p.ode_par, 0.0)
 
             û = appr_neural_network(view(u, [1, 4, 5, 6, 7, 8]), p.p_net, st)[1]# Network prediction
             @inbounds du[1] = -ode_par[1]*u[4]*u[1] + ode_par[2]*u[5]

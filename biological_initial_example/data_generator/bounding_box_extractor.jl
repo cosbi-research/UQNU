@@ -28,8 +28,8 @@ end
 #extend the bounding box by 50% on each side
 for i in 1:num_variables
     range = max_values[i] - min_values[i]
-    min_values[i] -= 0.5 * range
-    max_values[i] += 0.5 * range
+    min_values[i] -= 0.0 * range
+    max_values[i] += 0.0 * range
     bounding_box[i, :min_value] = min_values[i]
     bounding_box[i, :max_value] = max_values[i]
 end
