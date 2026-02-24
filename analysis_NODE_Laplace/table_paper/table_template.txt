@@ -1,0 +1,12 @@
+\begin{table}[ht]
+\centering
+\begin{tabular}{c|c|c|c}
+ & \textbf{Lotka-Volterra} & \textbf{Damped Oscillator} & \textbf{Lorenz} \\
+\hline
+Laplace Approximation & ##LV_standard## & ##DAMPED_standard## & ##LORENZ_standard##\\
+\hline
+Maximized OOD disagreement & ##LV_maximized## & ##DAMPED_maximized## & ##LORENZ_maximized##\\
+\hline
+\end{tabular}
+\caption{Comparison of results for different models.}
+\end{table}

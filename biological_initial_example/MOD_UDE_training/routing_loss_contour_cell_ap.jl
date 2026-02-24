@@ -15,7 +15,7 @@ maxiters = 1000
 observables = [4,]
 
 #parse the starting point index 
-starting_point_index = 3
+starting_point_index = 9
 #TODO ripristinare
 #starting_point_index = parse(Int, ARGS[1])
 @info "Starting point index: " starting_point_index
@@ -34,7 +34,7 @@ if !isdir(debug_folder)
 end
 
 rng = Random.default_rng()
-Random.seed!(rng, 0)
+Random.seed!(rng, 123)
 
 ensemble_selected = starting_point_index
 ensemble_interval_begin = (starting_point_index - 1) * 5 + 1

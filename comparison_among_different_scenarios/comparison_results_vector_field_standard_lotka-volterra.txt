@@ -1,0 +1,4 @@
+Comparison of CICPS distributions on vector field reconstruction
+Test NODE vs UDE: p-value = 0.03684703768084638
+Test NODE vs UDE with known parameters: p-value = 0.13986791147975935
+Test UDE vs UDE with known parameters: p-value = 0.2721332619952404

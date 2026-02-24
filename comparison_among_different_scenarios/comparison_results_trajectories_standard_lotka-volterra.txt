@@ -1,0 +1,4 @@
+Comparison of CICPS distributions on trajectories reconstruction
+Test NODE vs UDE: p-value = 1.082508822446903e-5
+Test NODE vs UDE with known parameters: p-value = 0.002879473467708762
+Test UDE vs UDE with known parameters: p-value = 0.07525601333650869
