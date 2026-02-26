@@ -1,0 +1,12 @@
+\begin{table}[ht]
+\centering
+\begin{tabular}{c|c|c|c}
+ & \textbf{Lotka-Volterra} & \textbf{Damped Oscillator} & \textbf{Lorenz} \\
+\hline
+Laplace Approximation & 0.760 ± 0.040 \quad \quad \quad & 0.760 ± 0.040 \quad \quad \quad & 0.760 ± 0.040 \quad \quad \quad\\
+\hline
+Maximized OOD disagreement & 0.811 ± 0.023 & 0.811 ± 0.023 & 0.811 ± 0.023\\
+\hline
+\end{tabular}
+\caption{Comparison of results for different models.}
+\end{table}
