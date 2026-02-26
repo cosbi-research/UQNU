@@ -43,3 +43,7 @@ Plots.plot!(plt,
     ylabel="",
     legend = :topright
 )
+
+#save the plot
+Plots.savefig(plt, "number_of_epochs_performed.png")
+Plots.savefig(plt, "number_of_epochs_performed.svg")
