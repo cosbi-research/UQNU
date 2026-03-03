@@ -37,7 +37,7 @@ reltol = 1e-6
 prob = ODEProblem(ground_truth_function, original_u0_survival, (initial_time_training, end_time_training), original_parameters)
 sol_death = solve(prob, integrator, u0=original_u0_death, saveat=times, reltol=reltol, abstol=abstol)
 
-end_time_training = 25.0f0
+end_time_training = 16.0f0
 times_new = range(initial_time_training, end_time_training, length=120)
 prob = ODEProblem(ground_truth_function, original_u0_survival, (initial_time_training, end_time_training), original_parameters)
 sol_survival = solve(prob, integrator, u0=original_u0_survival, saveat=times_new, reltol=reltol, abstol=abstol)

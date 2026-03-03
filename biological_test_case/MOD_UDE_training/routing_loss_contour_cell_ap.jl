@@ -15,9 +15,9 @@ maxiters = 1000
 observables = [4,]
 
 #parse the starting point index 
-starting_point_index = 1
+#starting_point_index = 3
 #TODO ripristinare
-#starting_point_index = parse(Int, ARGS[1])
+starting_point_index = parse(Int, ARGS[1])
 @info "Starting point index: " starting_point_index
 
 result_folder = result_folder * string(starting_point_index)
@@ -86,8 +86,10 @@ vector_field_function = get_vector_field_function(approximating_neural_network, 
 
 prob_uode_pred = ODEProblem{true}(uode_derivative_function, Array(training_data_structure.solution_dataframes[1][1, 2:end]), tspan)
 
+original_u0_death = [1.34 * 10^5 / 10^5, 1.0 * 10^5 / 10^5, 2.67 * 10^5 / 10^5, (1.0 * 10^(-10)), 0.0 / 10^5, 0.0 / 10^5, 2.9 * 10^4 / 10^5, 0.0 / 10^5]
+ 
 ################### DUBBIO SU COSA SIA ###########################
-initial_states = deepcopy(single_parameter_training.training_res.u0)
+initial_states = deepcopy(original_u0_death)
 
 ################################### instantiate the module for the analysis OOD #################
 include("out_of_domain_variability_nd.jl")
@@ -108,7 +110,7 @@ function model_simulation(θ, t, trajectory, initial_states, tmp_observables=not
         prob_uode_pred;
         p=θ,
         tspan=extrema(t),
-        u0=initial_states[1, :, 1]
+        u0=initial_states
       ),
       integrator;
       saveat=t,
@@ -165,7 +167,7 @@ end
 extremes = training_data_structure.solution_dataframes[1].t[[1, end]]
 times = collect(extremes[1]:0.01:extremes[2])
 
-initial_states_survival = deepcopy(initial_states)
+initial_states_survival = deepcopy(original_u0_death)
 initial_states_survival[end-1] = initial_states_survival[end-1]/ 10.0
 
 simulation = model_simulation(parameters, times, 1, initial_states_survival)
@@ -598,7 +600,7 @@ function getValidationCost(pars, initial_states, doplot=false)
 end
 
 #naive implementation of monte-carlo sampling
-number_iterations_for_trajectory = 100
+number_iterations_for_trajectory = 400
 validation_cost_threshold = 5e-3
 
 parameter_populations = [parameters .+ 0.0]
@@ -814,7 +816,7 @@ else
                 @info "trying to go backward " * string(backward_looking) * " times"
                 try
 
-                  if backward_looking == length(current_trajectory) || backward_looking > 10
+                  if backward_looking == length(current_trajectory) || backward_looking > 3
                     @error "I cannot go backward anymore, I stop the optimization"
                     push!(current_trajectory, iteration_original_parameters)
                     break
