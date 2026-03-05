@@ -77,7 +77,7 @@ plot_x4_death = Plots.scatter(
     label="Training data",
     xlabel="Time (hours)",
     ylabel="y4 (10⁵ molecules/cell)",
-    title="Cell death",
+    title="Cell survival",
     color="red",
     legend = nothing
 )
@@ -97,7 +97,7 @@ plot_x4_survival = Plots.plot(
     label="Ground truth",
     xlabel="Time (hours)",
     ylabel="y4 (10⁵ molecules/cell)",
-    title="Cell survival",
+    title="Cell death",
     color="blue",
     legend = nothing
 )

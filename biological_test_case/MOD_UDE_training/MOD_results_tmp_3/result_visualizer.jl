@@ -415,7 +415,6 @@ for ensemble_index in 1:10
   #try and visualize the results with 1.96 * std as confidence interval
   variable_contained_in_ci = []
   MOD_variable_contained_in_ci = []
-  variable_plots = []
   for var_index in 1:size(training_datas[1], 1)
 
     p = Plots.plot()
@@ -514,7 +513,7 @@ Plots.plot!(p,
   xtickfont=font(12),     # Increase x-axis tick font size
   ytickfont=font(12),     # Increase y-axis label font size
   legendfont=font(10),
-  title="Cell death - standard ensemble models"
+  title="Cell survival - standard ensemble models"
 )
 #circle the forth variable which is the observable
 savefig(p, "cell_apop_UDE_results/v_se_ci_ensemble.png")
@@ -541,7 +540,7 @@ Plots.plot!(p,
   xtickfont=font(12),     # Increase x-axis tick font size
   ytickfont=font(12),     # Increase y-axis label font size
   legendfont=font(10),
-  title="Cell death - MOD ensemble models"
+  title="Cell survival - MOD ensemble models"
 )
 #circle the forth variable which is the observable
 savefig(p, "cell_apop_UDE_results/v_se_ci_ensemble_death_MOD.png")
@@ -804,7 +803,7 @@ for ensemble_index in 1:10
       solutions_dataframe[:, var_index+1],
       label="ground truth",
       lw=2,
-      title="Cell survival - ensemble $(ensemble_index)",
+      title="Cell death - ensemble $(ensemble_index)",
     )
 
     n_ensemble = 5

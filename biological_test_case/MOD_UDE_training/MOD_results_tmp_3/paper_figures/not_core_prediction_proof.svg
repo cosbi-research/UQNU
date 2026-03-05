@@ -45,14 +45,14 @@
        width="158.75"
        height="105.83334"
        preserveAspectRatio="none"
-       xlink:href="v_se_ci_ensemble.png"
+       xlink:href="death_trajectory_candidates.png"
        id="image1"
        x="-10"
        y="3.3492589" /><image
        width="158.75"
        height="105.83334"
        preserveAspectRatio="none"
-       xlink:href="v_se_ci_ensemble_death_MOD.png"
+       xlink:href="survival_trajectory_candidates.png"
        id="image1-4"
        x="148.75"
        y="3.3492589" /></g></svg>

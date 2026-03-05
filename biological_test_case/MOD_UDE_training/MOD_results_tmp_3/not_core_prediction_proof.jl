@@ -400,7 +400,7 @@ Plots.scatter!(plt_death,
 Plots.plot!(plt_death,
   xlabel="Time (hours)",
   ylabel="y4 (10⁵ molecules/cell)",
-  title="Cell death"
+  title="Cell survival"
 )
 
 datafile = "../../data_generator/cell_apoptosis_silico_data_survival.jld"
@@ -417,7 +417,7 @@ Plots.plot!(plt_survival,
 Plots.plot!(plt_survival,
   xlabel="Time (hours)",
   ylabel="y4 (10⁵ molecules/cell)",
-  title="Cell survival"
+  title="Cell death"
 )
 
 #Save the plots 
