@@ -84,14 +84,14 @@ for ensemble_trajectory in ensemble_trajectories
   Plots.plot!(plt, [min_y1, max_y1], [ground_truth_δ, ground_truth_δ], label="", color=:grey, linestyle=:dash, linewidth=2)
 
 
-  Plots.plot!(xlabel=L"α", ylabel=L"δ", title="", legend=:topright)
+  Plots.plot!(xlabel=L"α", ylabel=L"δ", title="Lotka-Volterra (MOD ensemble $counter)", legend=:topright)
   Plots.plot!(plt, 
-    xguidefont=font(18),    # Increase x-axis label font size
-    yguidefont=font(18),
+    xguidefont=font(20),    # Increase x-axis label font size
+    yguidefont=font(20),
     titlefont=font(18),
     xtickfont=font(12),     # Increase x-axis tick font size
     ytickfont=font(12),     # Increase y-axis label font size
-    legendfont=font(10)
+    legendfont=font(12)
   )
 
 

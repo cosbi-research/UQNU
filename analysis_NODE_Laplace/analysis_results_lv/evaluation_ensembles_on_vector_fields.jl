@@ -164,7 +164,7 @@ max_y = maximum([maximum(p[2]) for p in points_to_plot])
 plt = Plots.scatter([p[1] for p in points_to_plot], [p[2] for p in points_to_plot], label="", xlabel="x", ylabel="y", zcolor=ground_truth_in_ensemble_to_plot, color=:viridis, markerstrokewidth=0, markersize=4)
 Plots.scatter!(plt, experimental_data[:, :x1], experimental_data[:, :x2], label="training data", legend=false)
 Plots.plot!(plt, xlims=(min_x, max_x), ylims=(min_y, max_y))
-Plots.plot!(plt, title="MOD", legend=:topleft)
+Plots.plot!(plt, title="Lotka-Volterra (MOD ensembles)", legend=:topleft)
 Plots.plot!(plt, 
     xguidefont=font(18),    # Increase x-axis label font size
     yguidefont=font(18),

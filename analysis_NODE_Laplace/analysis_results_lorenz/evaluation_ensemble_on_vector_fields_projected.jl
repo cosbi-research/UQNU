@@ -281,7 +281,7 @@ Plots.scatter!(plt, [p[1] for p in points_to_plot], [p[2] for p in points_to_plo
 Plots.scatter!(plt, [s[1] for s in experimental_points_centered_basis], [s[2] for s in experimental_points_centered_basis], label="", alpha=alphas, color=:orange)
 #plot with the legend outside
 Plots.plot!(plt, xlims=(min_x, max_x), ylims=(min_y, max_y))
-Plots.plot!(plt, title="MOD", legend=:topleft)
+Plots.plot!(plt, title="Lorenz (MOD ensembles)", legend=:topleft)
 Plots.plot!(plt, 
     xguidefont=font(18),    # Increase x-axis label font size
     yguidefont=font(18),
