@@ -1,0 +1,44 @@
+Trajectory contained in CI for death and survival conditions:
+0.9916666666666667
+0.9916666666666667
+1.0
+0.9916666666666667
+1.0
+0.9916666666666667
+0.9916666666666667
+0.9916666666666667
+1.0
+0.9916666666666667
+Trajectory contained in CI for survival conditions:
+0.38333333333333336
+0.3333333333333333
+1.0
+1.0
+0.4
+0.225
+1.0
+1.0
+0.275
+0.6166666666666667
+Trajectory contained in CI for MOD death conditions:
+1.0
+1.0
+1.0
+1.0
+1.0
+1.0
+1.0
+1.0
+1.0
+1.0
+Trajectory contained in CI for MOD survival conditions:
+1.0
+1.0
+1.0
+1.0
+1.0
+1.0
+1.0
+1.0
+0.5916666666666667
+1.0

@@ -10,7 +10,7 @@ This repository contains the scripts to replicate the analysis of uncertainty qu
 ### 🔹 `analysis_standard_ensembles/`
 This folder contains code to replicate the **motivation case study**:  
 - Analysis of 0.95 **prediction interval coverage** for standard ensembles in the **purely data-driven** scenario.
-- Applied to all three test systems:
+- Applied to all three test numerical test cases:
   - Lotka-Volterra
   - Damped Oscillator
   - Lorenz System
@@ -18,12 +18,22 @@ This folder contains code to replicate the **motivation case study**:
 ---
 
 ### 🔹 `analysis_NODE_maximized/`
-This folder contains code to reproduce results of the **proposed MOD (Maximized Out-of-Distribution) ensemble method** in the **purely data-driven** setting. It compares 0.95 coverage probability of MOD ensembles vs. standard ensembles on all three test systems.
+This folder contains code to reproduce results of the **proposed MOD (Maximized Out-of-Distribution) ensemble method** in the **purely data-driven** setting (numerical test cases). It compares 0.95 coverage proportion of MOD ensembles vs. standard ensembles on all three test systems.
+
+---
+
+### 🔹 `analysis_Laplace_maximized/`
+This folder contains code to reproduce results of the **Laplace approximation method** in the **purely data-driven** setting (numerical test cases). It compares 0.95 coverage proportion of MOD ensembles vs. Laplace approximation on all three test systems.
+
+---
+
+### 🔹 `analysis_NODE_maximized_Lorenz_1500_epochs/`
+This folder contains code to reproduce results of the **proposed MOD (Maximized Out-of-Distribution) ensemble method** in the **purely data-driven** setting with 1500 training epochs on the Lorenz system test case (numerical test cases). It compares 0.95 coverage proportion of MOD ensembles trained for 800 epochs vs.  MOD ensembles trained for 1500 epochs.
 
 ---
 
 ### 🔹 `analysis_NODE_maximized_multiple_training_set/`
-This folder contains code to reproduce results of the **proposed MOD (Maximized Out-of-Distribution) ensemble method** in the **purely data-driven** setting, when multiple training sets (each composed by three trajectories) are used. It compares 0.95 coverage probability of MOD ensembles vs. standard ensembles on all three test systems.
+This folder contains code to reproduce results of the **proposed MOD (Maximized Out-of-Distribution) ensemble method** in the **purely data-driven** setting, when multiple training sets (each composed by three trajectories) are used (numerical test cases). It compares 0.95 coverage proportion of MOD ensembles vs. standard ensembles on all three test systems.
 
 ---
 
@@ -33,12 +43,22 @@ Same as `analysis_NODE_maximized`, but with a stricter accuracy threshold:  it i
 ---
 
 ### 🔹 `analysis_UDE_maximized/`
-This folder contains analysis code for the **partially data-driven scenario**, where both **mechanistic parameters** and **neural network parameters** are estimated jointly. It compares 0.95 coverage probability of MOD ensembles vs. standard ensembles on all three test systems. We refer to the manuscript for details about which parts of the systems are assumed to be known.
+This folder contains analysis code for the **partially data-driven scenario**, where both **mechanistic parameters** and **neural network parameters** are estimated jointly (numerical test cases). It compares 0.95 coverage proportion of MOD ensembles vs. standard ensembles on all three test systems. We refer to the manuscript for details about which parts of the systems are assumed to be known.
 
 ---
 
 ### 🔹 `analysis_UDE_with_fixed_mech_par_maximized/`
-This folder contains analysis code for the **partially data-driven scenario**, where **mechanistic parameters** are assumed to be known and fixed to their ground truth values. It compares 0.95 coverage probability of MOD ensembles vs. standard ensembles on all three test systems. We refer to the manuscript for details about which parts of the systems are assumed to be known.
+This folder contains analysis code for the **partially data-driven scenario**, where **mechanistic parameters** are assumed to be known and fixed to their ground truth values (numerical test cases). It compares 0.95 coverage proportion of MOD ensembles vs. standard ensembles on all three test systems. We refer to the manuscript for details about which parts of the systems are assumed to be known.
+
+---
+
+### 🔹 `comparison_among_different_levels_of_prior_knowledge/`
+This folder contains analysis code for comparing the coverage proportions on OOD trajectories and state space points on the numerical test cases obtained with different levels of prior knowledge.
+
+---
+
+### 🔹 `biological_test_case/`
+This folder contains analysis code for the Computational Biology test case (cell apoptosis model).
 
 ---
 
